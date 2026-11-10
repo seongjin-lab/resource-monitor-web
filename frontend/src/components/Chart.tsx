@@ -9,6 +9,13 @@ export interface ChartSeries {
   values: (number | null | undefined)[];
 }
 
+export function ChartZoomReset({ label, onReset }: { label: string; onReset: () => void }) {
+  return (
+    <button type="button" className="button ghost chart-zoom-reset" aria-label={`${label} 확대 초기화`}
+      onClick={onReset}>확대 초기화</button>
+  );
+}
+
 interface Props {
   t: number[];
   series: ChartSeries[];

@@ -1,14 +1,54 @@
 import { useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDialogs } from '../App';
-import { api, formatValue, METRICS, warnLevel } from '../api';
-import { Chart } from '../components/Chart';
+import { api, formatValue, MetricDef, METRICS, Series, warnLevel } from '../api';
+import { Chart, ChartZoomReset } from '../components/Chart';
 import { EmptyState, RangePicker, StatusChip, TagList, toast } from '../components/Common';
 import { deleteServerWithConfirm } from '../components/Dialogs';
 import { refreshServers, useLive, useSeries } from '../live';
+import { useMetricZoom } from '../metricZoom';
 import { describeBucket, describeRange, parseRange, RangeSpec, rangeParams, relativeAgo } from '../range';
 
 const METRIC_COLORS = { cpu: '#5fd3a8', memory: '#6aa8ff', disk: '#c08bff', io: '#f5b84a' } as const;
+
+function DetailMetricChart({ serverId, metric, data, range, bounds, warn }: {
+  serverId: string;
+  metric: MetricDef;
+  data: Series;
+  range: RangeSpec;
+  bounds: { from: number; to: number };
+  warn?: number;
+}) {
+  const { zoom, zoomTo, resetZoom } = useMetricZoom(metric.key);
+  const { data: zoomData, error, loading } = useSeries(zoom ? serverId : undefined, zoom ?? range);
+  const chartData = zoomData ?? data;
+  const values = chartData[metric.key];
+  const series = useMemo(() => [{ label: metric.label, color: METRIC_COLORS[metric.key], values }], [metric, values]);
+
+  return (
+    <section className="panel">
+      <div className="row chart-heading">
+        <h3>{metric.label}{metric.unit === 'MB/s' ? ` (${metric.unit})` : ''}</h3>
+        {warn != null && <span className="hint chart-warning">경고 기준 {warn}%</span>}
+        {loading && <span className="hint" role="status">확대 구간을 불러오는 중…</span>}
+        {zoom && <ChartZoomReset label={metric.label} onReset={resetZoom} />}
+      </div>
+      {error && <div className="banner error" role="alert">확대 구간 조회 실패 · {error}</div>}
+      {values.some((value) => value != null) ? (
+        <Chart
+          t={chartData.t}
+          series={series}
+          unit={metric.unit}
+          max={metric.max}
+          warn={warn}
+          cursorTooltip
+          xRange={zoom ?? bounds}
+          onZoom={zoomTo}
+        />
+      ) : <EmptyState title="조회 기간에 이 지표의 기록이 없습니다" />}
+    </section>
+  );
+}
 
 export default function ServerDetail() {
   const { id } = useParams();
@@ -16,15 +56,11 @@ export default function ServerDetail() {
   const navigate = useNavigate();
   const live = useLive();
   const { openServer } = useDialogs();
-  const range = useMemo(() => parseRange(params), [params]);
+  const rangeSearch = new URLSearchParams([...params].filter(([key]) => ['range', 'from', 'to'].includes(key))).toString();
+  const range = useMemo(() => parseRange(new URLSearchParams(rangeSearch)), [rangeSearch]);
   const server = live.servers.find((item) => item.id === id);
   const { data, bounds, error, loading } = useSeries(server?.id, range);
   const setRange = (next: RangeSpec) => setParams(rangeParams(next));
-  const graphs = useMemo(() => data ? METRICS.map((metric) => ({
-    metric,
-    hasValues: data[metric.key].some((value) => value != null),
-    series: [{ label: metric.label, color: METRIC_COLORS[metric.key], values: data[metric.key] }],
-  })) : [], [data]);
 
   if (!server) {
     return (
@@ -119,7 +155,8 @@ export default function ServerDetail() {
       </div>
       <div className="row detail-range-info">
         <span>조회 기간 · {rangeLabel}{boundsLabel && ` · ${boundsLabel}`}{bucket && ` · ${bucket}`}</span>
-        {graphs.some(({ hasValues }) => hasValues) && <span>그래프를 드래그하면 구간을 확대합니다.</span>}
+        {data && METRICS.some(({ key }) => data[key].some((value) => value != null)) &&
+          <span>그래프를 드래그하면 해당 지표만 확대됩니다.</span>}
       </div>
       {error && <div className="banner error" role="alert">지표 조회 실패 · {error}</div>}
 
@@ -130,29 +167,10 @@ export default function ServerDetail() {
           <div className="panel"><EmptyState title="조회 기간에 수집 기록이 없습니다" /></div>
         ) : (
           <div className="chart-grid">
-            {graphs.map(({ metric, hasValues, series }) => {
-              const warn = metric.warnKey && live.settings ? live.settings[metric.warnKey] : undefined;
-              return (
-                <section key={metric.key} className="panel">
-                  <div className="row chart-heading">
-                    <h3>{metric.label}{metric.unit === 'MB/s' ? ` (${metric.unit})` : ''}</h3>
-                    {warn != null && <span className="hint chart-warning">경고 기준 {warn}%</span>}
-                  </div>
-                  {hasValues ? (
-                    <Chart
-                      t={data.t}
-                      series={series}
-                      unit={metric.unit}
-                      max={metric.max}
-                      warn={warn}
-                      cursorTooltip
-                      xRange={bounds}
-                      onZoom={(from, to) => setRange({ kind: 'fixed', from, to })}
-                    />
-                  ) : <EmptyState title="조회 기간에 이 지표의 기록이 없습니다" />}
-                </section>
-              );
-            })}
+            {METRICS.map((metric) => (
+              <DetailMetricChart key={metric.key} serverId={server.id} metric={metric} data={data} range={range} bounds={bounds}
+                warn={metric.warnKey && live.settings ? live.settings[metric.warnKey] : undefined} />
+            ))}
           </div>
         )
       )}

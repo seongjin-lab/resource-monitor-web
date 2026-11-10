@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react';
-import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { allTags, Server } from './api';
 import { StatusDot, TagFilter, Toasts } from './components/Common';
 import { deleteServerWithConfirm, ImportDialog, ServerDialog } from './components/Dialogs';
@@ -59,10 +59,12 @@ export default function App() {
         )}
         <aside className="sidebar" hidden={collapsed}>
           <div className="brand">
-            <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden>
-              <polyline points="5,22 11,15 16,19 22,9 27,13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            리소스 모니터
+            <Link to="/" className="brand-link" aria-label="리소스 모니터 전체 현황">
+              <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden>
+                <polyline points="5,22 11,15 16,19 22,9 27,13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              리소스 모니터
+            </Link>
             <button className="icon-button sidebar-close" onClick={() => toggleSidebar(true)} title="사이드바 닫기" aria-label="사이드바 닫기">
               «
             </button>
