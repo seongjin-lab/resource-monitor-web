@@ -108,7 +108,12 @@ export default function App() {
                 </NavLink>
                 <div className="item-actions">
                   <button className="icon-button" title="서버 설정" aria-label={`${server.name} 설정`} onClick={() => setDialog({ kind: 'server', server })}>
-                    ⚙
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                      <path d="M4 6h7m4 0h5M4 12h3m4 0h9M4 18h10m4 0h2" />
+                      <circle cx="13" cy="6" r="2" />
+                      <circle cx="9" cy="12" r="2" />
+                      <circle cx="16" cy="18" r="2" />
+                    </svg>
                   </button>
                   <button
                     className="icon-button danger"
@@ -118,7 +123,9 @@ export default function App() {
                       if ((await deleteServerWithConfirm(server)) && location.pathname.includes(server.id)) navigate('/');
                     }}
                   >
-                    🗑
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M10 11v5m4-5v5" />
+                    </svg>
                   </button>
                 </div>
               </li>

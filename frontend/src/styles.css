@@ -75,12 +75,20 @@ code { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; word
 .tag-input:focus-within { outline: 2px solid rgba(95, 211, 168, 0.5); outline-offset: 1px; }
 .tag-input input { border: 0; outline: none; background: transparent; flex: 1; min-width: 120px; padding: 2px 4px; }
 .server-list li { position: relative; }
-.item-actions { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 3px; opacity: 0.55; }
-.server-list li:hover .item-actions, .server-list li:focus-within .item-actions { opacity: 1; }
-.server-list li a { padding-right: 66px; }
-.item-actions .icon-button { font-size: 13px; padding: 4px 6px; border-radius: 6px; background: var(--panel); border: 1px solid var(--border); }
-.item-actions .icon-button:hover { color: var(--text); }
-.item-actions .icon-button.danger:hover { color: var(--critical); border-color: rgba(239, 111, 111, 0.5); }
+.item-actions { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 5px; }
+.server-list li a { padding-right: 76px; }
+.item-actions .icon-button {
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border-radius: 8px; border: 1px solid color-mix(in srgb, var(--text) 18%, var(--border));
+  background: var(--panel-2); color: var(--text);
+}
+.item-actions .icon-button:hover { color: var(--accent); border-color: var(--accent); }
+.item-actions .icon-button:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.item-actions .icon-button.danger {
+  color: var(--critical); background: color-mix(in srgb, var(--critical) 8%, var(--panel));
+  border-color: color-mix(in srgb, var(--critical) 35%, var(--border));
+}
+.item-actions .icon-button.danger:hover { background: color-mix(in srgb, var(--critical) 18%, var(--panel)); border-color: var(--critical); }
 .sidebar-close { margin-left: auto; }
 .layout.collapsed { grid-template-columns: 1fr; }
 .sidebar[hidden] { display: none; }

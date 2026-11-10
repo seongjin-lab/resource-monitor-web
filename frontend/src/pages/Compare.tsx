@@ -119,7 +119,7 @@ export default function Compare() {
   const live = useLive();
   const [params, setParams] = useSearchParams();
   const range = parseRange(params);
-  const metricKey = params.get('metric');
+  const metricKey = params.get('metric') ?? 'all';
   const showAll = metricKey === 'all';
   const metric = METRICS.find((item) => item.key === metricKey) ?? METRICS[0];
   const tags = allTags(live.servers);
