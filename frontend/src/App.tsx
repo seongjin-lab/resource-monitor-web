@@ -90,7 +90,7 @@ export default function App() {
           {tags.length > 0 && (
             <div className="sidebar-filter">
               <span className="hint">목록 필터</span>
-              <TagFilter tags={tags} value={tag && tags.includes(tag) ? tag : null} onChange={setTag} />
+              <TagFilter tags={tags} colors={live.settings?.tagColors} value={tag && tags.includes(tag) ? tag : null} onChange={setTag} />
             </div>
           )}
           {live.servers.length > 6 && (

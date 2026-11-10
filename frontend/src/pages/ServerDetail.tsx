@@ -7,7 +7,8 @@ import { EmptyState, RangePicker, StatusChip, TagList, toast } from '../componen
 import { deleteServerWithConfirm } from '../components/Dialogs';
 import { refreshServers, useLive, useSeries } from '../live';
 import { describeBucket, describeRange, parseRange, RangeSpec, rangeParams, relativeAgo } from '../range';
-import { METRIC_COLORS } from './Overview';
+
+const METRIC_COLORS = { cpu: '#5fd3a8', memory: '#6aa8ff', disk: '#c08bff', io: '#f5b84a' } as const;
 
 export default function ServerDetail() {
   const { id } = useParams();
@@ -82,7 +83,7 @@ export default function ServerDetail() {
               ))}
           </h1>
           <p className="subtitle">
-            {server.user}@{server.host}:{server.port} · 마지막 갱신 {relativeAgo(server.lastUtc)} <TagList tags={server.tags} />
+            {server.user}@{server.host}:{server.port} · 마지막 갱신 {relativeAgo(server.lastUtc)} <TagList tags={server.tags} colors={live.settings?.tagColors} />
           </p>
         </div>
         <div className="row">
@@ -144,7 +145,6 @@ export default function ServerDetail() {
                       unit={metric.unit}
                       max={metric.max}
                       warn={warn}
-                      syncKey={`detail-${server.id}`}
                       cursorTooltip
                       xRange={bounds}
                       onZoom={(from, to) => setRange({ kind: 'fixed', from, to })}

@@ -47,16 +47,26 @@ code { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; word
 .tags { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }
 .tag {
   display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; padding: 1px 7px; border-radius: 999px;
-  background: rgba(106, 168, 255, 0.12); color: #9cc4ff; border: 1px solid rgba(106, 168, 255, 0.25); white-space: nowrap;
+  color: var(--tag-color); background: color-mix(in srgb, var(--tag-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag-color) 28%, transparent); white-space: nowrap;
 }
 .tag button { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0 0 0 2px; font-size: 13px; line-height: 1; }
-.tag-filter { display: flex; gap: 4px; flex-wrap: wrap; }
+.tag-filter { --tag-color: #9cc4ff; display: flex; gap: 4px; flex-wrap: wrap; }
 .tag-filter button {
   border: 1px solid var(--border); background: transparent; color: var(--muted); border-radius: 999px;
   padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer;
 }
 .tag-filter button:hover { color: var(--text); }
-.tag-filter button.active { background: rgba(106, 168, 255, 0.15); border-color: rgba(106, 168, 255, 0.5); color: #9cc4ff; font-weight: 600; }
+.tag-filter button.tag-filter-option {
+  color: var(--tag-color); border-color: color-mix(in srgb, var(--tag-color) 30%, transparent);
+}
+.tag-filter button.tag-filter-option:hover,
+.tag-filter button[aria-pressed="true"] {
+  color: var(--tag-color); background: color-mix(in srgb, var(--tag-color) 15%, transparent);
+}
+.tag-filter button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--tag-color) 70%, transparent); font-weight: 600;
+}
 .tag-input {
   display: flex; flex-wrap: wrap; gap: 5px; align-items: center; background: var(--bg); border: 1px solid var(--border);
   border-radius: 8px; padding: 5px 7px; min-height: 36px;
@@ -151,9 +161,12 @@ textarea { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; 
 .metric.level-critical .metric-value, .level-critical .tile-value { color: var(--critical); }
 
 /* ---- 전체 현황 카드 ---- */
-.legend { display: flex; gap: 14px; color: var(--muted); font-size: 12px; }
-.legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 .overview-filters { gap: 8px 16px; }
+.overview-group { margin-top: 18px; }
+.overview-group-title { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+.overview-group-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.overview-group-title .tags { min-width: 0; }
+.overview-group-title .tag { min-width: 0; font-size: inherit; white-space: normal; overflow-wrap: anywhere; }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
 .server-card {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px;
@@ -171,7 +184,7 @@ textarea { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; 
 .card-title { font-weight: 700; font-size: 15px; }
 .card-sub { color: var(--muted); font-size: 12px; }
 .card-error { color: #ffb3b3; font-size: 12.5px; }
-.metric-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(max-content, 1.2fr); gap: 8px; }
+.metric-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(max-content, 1fr) minmax(max-content, 1.2fr); gap: 8px; }
 .metric { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .metric-label { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric-row .metric-label { white-space: normal; }
@@ -180,8 +193,6 @@ textarea { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; 
 .bar span { display: block; height: 100%; background: var(--accent); }
 .metric.level-warn .bar span { background: var(--warn); }
 .metric.level-critical .bar span { background: var(--critical); }
-.card-spark { position: relative; height: 40px; }
-.card-spark .sparkline { position: absolute; inset: 0; width: 100%; height: 40px; }
 .card-foot { color: var(--muted); font-size: 11.5px; }
 
 /* ---- 상세 ---- */
@@ -264,6 +275,17 @@ textarea { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; 
 .settings-thresholds { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; }
 .settings-threshold { display: flex; flex-direction: column; gap: 6px; }
 .settings-threshold-preview { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; }
+.tag-palette-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.tag-palette { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.tag-palette .button { padding: 4px 9px; font-size: 12px; }
+.tag-palette .button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.tag-swatch {
+  width: 28px; height: 28px; border: 1px solid transparent; border-radius: 50%;
+  padding: 0; color: var(--bg); font-weight: 700; cursor: pointer;
+}
+.tag-swatch[aria-pressed="true"] { border-color: var(--text); }
+.tag-swatch:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.tag-swatch:disabled { opacity: 0.5; cursor: not-allowed; }
 .settings-warn { color: var(--warn); }
 .settings-critical { color: var(--critical); }
 .settings-retention-warning {

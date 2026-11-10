@@ -224,6 +224,7 @@ api.MapGet("/samples/recent", (int? minutes, int? points, ServerStore store, Sam
 });
 
 // ---- 설정 ----
+var settingsWriteLock = new object();
 api.MapGet("/settings", (SettingsStore settings) => new { settings.Current, AppSettings.IntervalChoices });
 
 api.MapPut("/settings", (AppSettings input, SettingsStore settings, EventBroker broker) =>
@@ -233,9 +234,27 @@ api.MapPut("/settings", (AppSettings input, SettingsStore settings, EventBroker 
         return Fail(error);
     }
 
-    settings.Save(input);
-    broker.Publish("settings", input);
-    return Results.Ok(input);
+    lock (settingsWriteLock)
+    {
+        // 요청에 들어온 태그만 변경하고, 값이 null이면 자동 색상으로 되돌린다.
+        var colors = new Dictionary<string, string?>(settings.Current.TagColors);
+        foreach (var (tag, color) in input.TagColors)
+        {
+            if (color is null)
+            {
+                colors.Remove(tag);
+            }
+            else
+            {
+                colors[tag] = color.ToLowerInvariant();
+            }
+        }
+
+        var saved = input with { TagColors = colors };
+        settings.Save(saved);
+        broker.Publish("settings", saved);
+        return Results.Ok(saved);
+    }
 });
 
 // ---- 실시간 이벤트(SSE) ----

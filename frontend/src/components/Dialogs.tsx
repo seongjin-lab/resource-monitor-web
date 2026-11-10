@@ -81,7 +81,8 @@ export function ServerDialog({ server, onClose, onSaved }: {
   const fileVersion = useRef(0);
   const [readingKey, setReadingKey] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
-  const tagSuggestions = allTags(useLive().servers);
+  const live = useLive();
+  const tagSuggestions = allTags(live.servers);
   const [test, setTest] = useState<TestState>({ kind: 'idle' });
   const [trusted, setTrusted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -225,7 +226,7 @@ export function ServerDialog({ server, onClose, onSaved }: {
           <div className="field">
             <label htmlFor="server-tags" className="server-field-label">태그 (선택)</label>
             <TagInput value={form.tags} onChange={(tags) => set('tags', tags)} suggestions={tagSuggestions}
-              text={tagText} onTextChange={setTagText} disabled={saving} />
+              colors={live.settings?.tagColors} text={tagText} onTextChange={setTagText} disabled={saving} />
             <small id="server-tags-hint">서버를 묶는 태그입니다. Enter나 쉼표로 추가할 수 있습니다.</small>
           </div>
           <div className="row server-address-row">

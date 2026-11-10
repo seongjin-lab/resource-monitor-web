@@ -33,7 +33,10 @@ export interface Settings {
   cpuWarn: number;
   memoryWarn: number;
   diskWarn: number;
+  tagColors?: TagColors;
 }
+
+export type TagColors = Record<string, string | null>;
 
 export interface ServerInput {
   id?: string;
@@ -66,7 +69,7 @@ export interface MetricDef {
 export const METRICS: MetricDef[] = [
   { key: 'cpu', label: 'CPU', unit: '%', max: 100, warnKey: 'cpuWarn' },
   { key: 'memory', label: '메모리', unit: '%', max: 100, warnKey: 'memoryWarn' },
-  { key: 'disk', label: '디스크 용량 (/)', unit: '%', max: 100, warnKey: 'diskWarn' },
+  { key: 'disk', label: '디스크 사용률', unit: '%', max: 100, warnKey: 'diskWarn' },
   { key: 'io', label: '디스크 입출력', unit: 'MB/s' },
 ];
 
@@ -116,8 +119,6 @@ export const api = {
     request<Series>(`/api/servers/${id}/samples?from=${Math.floor(from)}&to=${Math.ceil(to)}&points=${points}`),
   csvUrl: (id: string, from: number, to: number) =>
     `/api/servers/${id}/samples.csv?from=${Math.floor(from)}&to=${Math.ceil(to)}`,
-  recent: (minutes: number, points: number) =>
-    request<Record<string, Series>>(`/api/samples/recent?minutes=${minutes}&points=${points}`),
   settings: () => request<{ current: Settings; intervalChoices: number[] }>('/api/settings'),
   saveSettings: (settings: Settings) => request<Settings>('/api/settings', json('PUT', settings)),
 };

@@ -16,7 +16,6 @@ interface Props {
   max?: number;
   warn?: number;
   height?: number;
-  syncKey?: string;
   spanGaps?: boolean;
   cursorTooltip?: boolean;
   /** x축 범위(ms). 지정하면 데이터가 없어도 이 범위를 그린다. */
@@ -57,7 +56,7 @@ export function Chart(props: Props) {
   const height = props.height ?? 220;
   const signature = [
     props.series.map((series) => series.label + series.color).join('|'),
-    props.unit, props.max, props.warn, height, props.syncKey, props.spanGaps, props.cursorTooltip, Boolean(props.onZoom),
+    props.unit, props.max, props.warn, height, props.spanGaps, props.cursorTooltip, Boolean(props.onZoom),
   ].join('/');
 
   useEffect(() => {
@@ -68,10 +67,6 @@ export function Chart(props: Props) {
       width: element.clientWidth || 600,
       height,
       cursor: {
-        sync: props.syncKey ? {
-          key: props.syncKey,
-          filters: { pub: (type) => type !== 'mousedown' && type !== 'mouseup' },
-        } : undefined,
         drag: { x: Boolean(props.onZoom), y: false, setScale: false },
         points: { size: 6 },
       },
@@ -133,8 +128,7 @@ export function Chart(props: Props) {
       hooks: {
         setCursor: props.cursorTooltip ? [(u) => {
           const { idx, idxs, left, top } = u.cursor;
-          if (idx == null || left == null || top == null || left < 0 || top < 0 || u.data[0][idx] == null ||
-            (props.syncKey && !u.over.matches(':hover'))) {
+          if (idx == null || left == null || top == null || left < 0 || top < 0 || u.data[0][idx] == null) {
             setHover(null);
             return;
           }
@@ -233,37 +227,5 @@ export function Chart(props: Props) {
         </div>
       )}
     </div>
-  );
-}
-
-/** 카드에 넣는 작은 추이 그래프. 0~max 범위를 SVG 선으로 그린다. */
-export function Sparkline({ t, values, color, max = 100, width = 120, height = 32 }: {
-  t: number[];
-  values: (number | null)[];
-  color: string;
-  max?: number;
-  width?: number;
-  height?: number;
-}) {
-  if (t.length < 2) return <svg className="sparkline" width={width} height={height} />;
-  const start = t[0];
-  const span = Math.max(1, t[t.length - 1] - start);
-  const top = Math.max(max, ...values.map((value) => value ?? 0));
-  let path = '';
-  let pen = false;
-  values.forEach((value, index) => {
-    if (value == null) {
-      pen = false;
-      return;
-    }
-    const x = ((t[index] - start) / span) * width;
-    const y = height - 1 - (value / top) * (height - 2);
-    path += `${pen ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
-    pen = true;
-  });
-  return (
-    <svg className="sparkline" width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-      <path d={path} fill="none" stroke={color} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-    </svg>
   );
 }

@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { ServerStatus } from '../api';
+import { ServerStatus, TagColors } from '../api';
 import { PRESETS, RangeSpec, resolveRange, toLocalInput } from '../range';
+import { getTagColor, tagColorStyle } from '../tagColors';
 
 const STATUS_LABEL: Record<ServerStatus, string> = {
   ok: '정상',
@@ -122,25 +123,31 @@ export function RangePicker({ value, onChange }: { value: RangeSpec; onChange: (
   );
 }
 
-export function TagList({ tags }: { tags: string[] }) {
+export function TagList({ tags, colors }: { tags: string[]; colors?: TagColors }) {
   if (!tags?.length) return null;
   return (
     <span className="tags">
       {tags.map((tag) => (
-        <span key={tag} className="tag">#{tag}</span>
+        <span key={tag} className="tag" style={tagColorStyle(tag, getTagColor(colors, tag))}>#{tag}</span>
       ))}
     </span>
   );
 }
 
 /** 태그 하나를 고르면 그 태그가 붙은 서버만 보이게 하는 필터. 선택 해제는 "전체". */
-export function TagFilter({ tags, value, onChange }: { tags: string[]; value: string | null; onChange: (tag: string | null) => void }) {
+export function TagFilter({ tags, colors, value, onChange }: {
+  tags: string[];
+  colors?: TagColors;
+  value: string | null;
+  onChange: (tag: string | null) => void;
+}) {
   if (tags.length === 0) return null;
   return (
     <div className="tag-filter" role="group" aria-label="태그로 거르기">
-      <button className={value === null ? 'active' : ''} onClick={() => onChange(null)}>전체</button>
+      <button aria-pressed={value === null} onClick={() => onChange(null)}>전체</button>
       {tags.map((tag) => (
-        <button key={tag} className={value === tag ? 'active' : ''} onClick={() => onChange(value === tag ? null : tag)}>
+        <button key={tag} className="tag-filter-option" style={tagColorStyle(tag, getTagColor(colors, tag))}
+          aria-pressed={value === tag} onClick={() => onChange(value === tag ? null : tag)}>
           #{tag}
         </button>
       ))}
@@ -149,10 +156,11 @@ export function TagFilter({ tags, value, onChange }: { tags: string[]; value: st
 }
 
 /** 칩 형태 태그 입력. Enter·쉼표로 추가하고, 빈 입력에서 Backspace로 마지막 태그를 지운다. */
-export function TagInput({ value, onChange, suggestions, text, onTextChange, disabled }: {
+export function TagInput({ value, onChange, suggestions, colors, text, onTextChange, disabled }: {
   value: string[];
   onChange: (tags: string[]) => void;
   suggestions: string[];
+  colors?: TagColors;
   text: string;
   onTextChange: (text: string) => void;
   disabled: boolean;
@@ -170,7 +178,7 @@ export function TagInput({ value, onChange, suggestions, text, onTextChange, dis
   return (
     <div className="tag-input">
       {value.map((tag) => (
-        <span key={tag} className="tag">
+        <span key={tag} className="tag" style={tagColorStyle(tag, getTagColor(colors, tag))}>
           #{tag}
           <button type="button" disabled={disabled} aria-label={`${tag} 태그 빼기`} onClick={() => onChange(value.filter((item) => item !== tag))}>×</button>
         </span>

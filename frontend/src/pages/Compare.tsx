@@ -6,6 +6,7 @@ import { Chart, ChartSeries } from '../components/Chart';
 import { EmptyState, RangePicker, Segmented } from '../components/Common';
 import { appendSample, onSample, useLive } from '../live';
 import { describeBucket, describeRange, parseRange, RangeSpec, rangeParams, resolveRange } from '../range';
+import { getTagColor, tagColorStyle } from '../tagColors';
 
 const PALETTE = ['#5fd3a8', '#6aa8ff', '#f5b84a', '#ef6f8a', '#c08bff', '#4fd1e0', '#e8e86a', '#ff9a5c'];
 
@@ -16,15 +17,31 @@ export default function Compare() {
   const range = parseRange(params);
   const metricKey = (params.get('metric') as MetricKey) || 'cpu';
   const metric = METRICS.find((item) => item.key === metricKey) ?? METRICS[0];
-  const selected = (params.get('servers') ?? '').split(',').filter((id) => live.servers.some((server) => server.id === id));
+  const tags = allTags(live.servers);
+  const requestedTags = params.getAll('tag');
+  const activeTags = tags.filter((tag) => requestedTags.includes(tag));
+  const previousServers = params.get('previousServers');
+  const serversForTags = (selectedTags: string[]) =>
+    live.servers.filter((server) => server.tags.some((tag) => selectedTags.includes(tag))).map((server) => server.id);
+  const manualServers = requestedTags.length > 0 ? previousServers : params.get('servers');
+  const selected = activeTags.length > 0
+    ? serversForTags(activeTags)
+    : (manualServers ?? '').split(',').filter((id) => live.servers.some((server) => server.id === id));
   const key = selected.join(',') + JSON.stringify(range);
   const [result, setResult] = useState<{ key: string; data: Record<string, Series> } | { key: string; error: string }>();
   const currentResult = result?.key === key ? result : undefined;
   const data = currentResult && 'data' in currentResult ? currentResult.data : undefined;
 
-  const update = (patch: Record<string, string>) => {
+  const update = (patch: Record<string, string | string[] | null>) => {
     const next = new URLSearchParams(params);
-    Object.entries(patch).forEach(([key, value]) => next.set(key, value));
+    for (const [key, value] of Object.entries(patch)) {
+      if (typeof value === 'string') {
+        next.set(key, value);
+      } else {
+        next.delete(key);
+        value?.forEach((item) => next.append(key, item));
+      }
+    }
     setParams(next);
   };
   const setRange = (next: RangeSpec) => {
@@ -33,13 +50,29 @@ export default function Compare() {
     Object.entries(rangeParams(next)).forEach(([key, value]) => rest.set(key, value));
     setParams(rest);
   };
-  const toggleServer = (id: string) =>
-    update({ servers: (selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id]).join(',') });
+  const toggleServer = (id: string) => {
+    const servers = selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id];
+    update({ tag: null, previousServers: null, servers: servers.join(',') });
+  };
+
+  const toggleTag = (tag: string) => {
+    const nextTags = activeTags.includes(tag) ? activeTags.filter((item) => item !== tag) : [...activeTags, tag];
+    if (nextTags.length === 0) {
+      update({ tag: null, previousServers: null, servers: previousServers ?? '' });
+      return;
+    }
+    update({
+      tag: nextTags,
+      servers: serversForTags(nextTags).join(','),
+      previousServers: activeTags.length > 0 ? previousServers : selected.join(','),
+    });
+  };
 
   // 처음 들어오면 켜진 서버를 최대 4대 골라 둔다.
   useEffect(() => {
-    if (!params.get('servers') && live.servers.length > 0) {
-      update({ servers: live.servers.filter((server) => server.enabled).slice(0, 4).map((server) => server.id).join(',') });
+    if (!params.has('servers') && !params.has('tag') && live.servers.length > 0) {
+      const servers = live.servers.filter((server) => server.enabled).slice(0, 4).map((server) => server.id).join(',');
+      update({ tag: null, previousServers: null, servers });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live.servers.length]);
@@ -97,7 +130,6 @@ export default function Compare() {
   const xRange = useMemo(() => resolveRange(range), [t, params.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
   const bucket = data && Object.values(data).map((series) => describeBucket(series.bucketMs)).find(Boolean);
   const warn = metric.warnKey && live.settings ? live.settings[metric.warnKey] : undefined;
-  const tags = allTags(live.servers);
   const rangeLabel = describeRange(range);
 
   if (live.loaded && live.servers.length === 0) {
@@ -122,14 +154,16 @@ export default function Compare() {
         <RangePicker value={range} onChange={setRange} />
       </div>
       {tags.length > 0 && (
-        <div className="chips">
-          <span className="hint">비교 대상을 태그로 교체</span>
+        <div className="chips tag-filter">
+          <span className="hint">비교할 태그 (여러 개 선택 가능)</span>
           {tags.map((tag) => (
             <button
               key={tag}
-              className="select-chip"
-              aria-label={`비교 대상을 #${tag} 태그 서버로 교체`}
-              onClick={() => update({ servers: live.servers.filter((server) => server.tags.includes(tag)).map((server) => server.id).join(',') })}
+              className="tag-filter-option"
+              style={tagColorStyle(tag, getTagColor(live.settings?.tagColors, tag))}
+              aria-label={`#${tag} 태그 서버 비교`}
+              aria-pressed={activeTags.includes(tag)}
+              onClick={() => toggleTag(tag)}
             >
               #{tag}
             </button>

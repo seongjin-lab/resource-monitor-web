@@ -11,6 +11,7 @@ public sealed record AppSettings
     public double CpuWarn { get; init; } = 80;
     public double MemoryWarn { get; init; } = 85;
     public double DiskWarn { get; init; } = 85;
+    public IReadOnlyDictionary<string, string?> TagColors { get; init; } = new Dictionary<string, string?>();
 
     public string? Validate()
     {
@@ -22,6 +23,13 @@ public sealed record AppSettings
         if (RetentionDays is < 1 or > 3650)
         {
             return "보관 기간은 1~3650일이어야 합니다.";
+        }
+
+        if (TagColors is null || TagColors.Any(entry =>
+            string.IsNullOrWhiteSpace(entry.Key) || entry.Key.Length > 30 ||
+            (entry.Value is { } color && (color.Length != 7 || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit)))))
+        {
+            return "태그 색상은 30자 이내 태그에 6자리 색상 코드로 지정해야 합니다.";
         }
 
         return new[] { CpuWarn, MemoryWarn, DiskWarn }.Any(value => value is < 1 or > 100)
