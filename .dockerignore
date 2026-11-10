@@ -1,0 +1,11 @@
+**/node_modules
+**/bin
+**/obj
+backend/wwwroot
+backend/storage
+backend/Data/monitor.db*
+backend/Data/keys
+storage
+.env
+.git
+.claude

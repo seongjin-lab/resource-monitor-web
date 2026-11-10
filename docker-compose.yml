@@ -1,0 +1,13 @@
+services:
+  resource-monitor:
+    build: .
+    image: resource-monitor-web:latest
+    container_name: resource-monitor
+    restart: unless-stopped
+    # ./storage 폴더 소유자와 같은 사용자로 실행한다. .env에 APP_UID/APP_GID(id -u, id -g)를 적는다.
+    user: "${APP_UID:-1654}:${APP_GID:-1654}"
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    volumes:
+      # monitor.db(서버 목록·지표·설정)와 keys/(비밀번호 암호화 키)가 저장된다. 함께 백업해야 한다.
+      - ./storage:/data

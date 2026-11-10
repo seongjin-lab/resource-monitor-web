@@ -1,0 +1,7 @@
+node_modules/
+bin/
+obj/
+backend/wwwroot/
+backend/storage/
+storage/
+.env
