@@ -28,8 +28,6 @@ docker compose up -d --build
 
 `http://<서버 주소>:<HOST_PORT>`로 접속합니다. 데이터는 compose 파일 옆의 `./storage` 폴더(컨테이너의 `/data`)에 저장됩니다.
 
-현재 운영 위치: `cruzlink@192.168.1.240:/home/cruzlink/test/resource-monitor-web` → http://192.168.1.240:18080
-
 - `monitor.db`: 서버 목록, 수집 지표, 설정 (SQLite)
 - `keys/`: SSH 비밀번호·개인 키를 암호화하는 키 (ASP.NET Data Protection)
 
