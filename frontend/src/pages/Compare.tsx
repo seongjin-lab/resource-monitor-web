@@ -14,6 +14,8 @@ const METRIC_OPTIONS = [
   ...METRICS.map(({ key, label }) => ({ value: key, label })),
   { value: 'all' as const, label: '모든 지표' },
 ];
+const SELECTION_STORAGE_KEY = 'compare-selection';
+const SELECTION_PARAMS = ['servers', 'tag', 'previousServers'];
 
 function useComparisonSeries(selected: string[], range?: RangeSpec) {
   const key = selected.join(',') + JSON.stringify(range);
@@ -118,6 +120,8 @@ function ComparisonMetricChart({ metric, sources, data, xRange, rangeLabel, buck
 export default function Compare() {
   const live = useLive();
   const [params, setParams] = useSearchParams();
+  const hasSelection = params.has('servers') || params.has('tag');
+  const selection = new URLSearchParams([...params].filter(([key]) => SELECTION_PARAMS.includes(key))).toString();
   const range = parseRange(params);
   const metricKey = params.get('metric') ?? 'all';
   const showAll = metricKey === 'all';
@@ -172,14 +176,35 @@ export default function Compare() {
     });
   };
 
-  // 처음 들어오면 켜진 서버를 최대 4대 골라 둔다.
   useEffect(() => {
-    if (!params.has('servers') && !params.has('tag') && live.servers.length > 0) {
-      const servers = live.servers.filter((server) => server.enabled).slice(0, 4).map((server) => server.id).join(',');
-      update({ tag: null, previousServers: null, servers });
+    if (!hasSelection) return;
+    try {
+      localStorage.setItem(SELECTION_STORAGE_KEY, selection);
+    } catch {
+      /* 저장소를 사용할 수 없을 때는 URL에 선택 상태가 남는다. */
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live.servers.length]);
+  }, [hasSelection, selection]);
+
+  useEffect(() => {
+    if (hasSelection || !live.loaded || live.servers.length === 0) return;
+
+    let saved = new URLSearchParams();
+    try {
+      saved = new URLSearchParams(localStorage.getItem(SELECTION_STORAGE_KEY) ?? '');
+    } catch {
+      /* 저장소를 사용할 수 없을 때는 초기 선택을 사용한다. */
+    }
+    if (!saved.has('servers') && !saved.has('tag')) {
+      const defaults = live.servers.filter((server) => server.enabled).slice(0, 4).map((server) => server.id);
+      saved = new URLSearchParams({ servers: defaults.join(',') });
+    }
+    const next = new URLSearchParams(params);
+    for (const key of SELECTION_PARAMS) {
+      next.delete(key);
+      saved.getAll(key).forEach((value) => next.append(key, value));
+    }
+    setParams(next, { replace: true });
+  }, [hasSelection, live.loaded, live.servers, params, setParams]);
 
   const sources = useMemo(() => selected.map((id) => {
     const index = live.servers.findIndex((server) => server.id === id);
