@@ -14,7 +14,7 @@ type DialogState = { kind: 'server'; server?: Server } | { kind: 'import' } | nu
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 640;
 const SIDEBAR_MIN_CONTENT = 410;
-const SIDEBAR_COLLAPSE_WIDTH = 110;
+const SIDEBAR_SNAP_DISTANCE = 24;
 const SIDEBAR_MOBILE_WIDTH = 760;
 type SidebarDrag = { pointerId: number; startX: number; startWidth: number; moved: boolean };
 
@@ -72,29 +72,43 @@ export default function App() {
     }
   };
   const toggleSidebar = () => saveSidebar({ ...sidebar, collapsed: !collapsed });
-  const resizeWidth = (clientX: number, { startX, startWidth }: SidebarDrag) =>
-    Math.max(0, Math.min(maxSidebarWidth, Math.round(startWidth + clientX - startX)));
+  const resizeWidth = (clientX: number, active: SidebarDrag) => {
+    if (active.startWidth === 0) {
+      if (clientX - active.startX < SIDEBAR_SNAP_DISTANCE) return 0;
+      active.startX += SIDEBAR_SNAP_DISTANCE;
+      active.startWidth = SIDEBAR_MIN_WIDTH;
+    }
+
+    const width = Math.round(active.startWidth + clientX - active.startX);
+    const closeAt = SIDEBAR_MIN_WIDTH - SIDEBAR_SNAP_DISTANCE;
+    if (width <= closeAt) {
+      active.startX += closeAt - active.startWidth;
+      active.startWidth = 0;
+      return 0;
+    }
+    return Math.max(SIDEBAR_MIN_WIDTH, Math.min(maxSidebarWidth, width));
+  };
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
     if (mobile || event.button !== 0 || drag.current || !regionRef.current) return;
     event.currentTarget.focus();
     event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: regionRef.current.clientWidth, moved: false };
+    const startWidth = sidebarHidden ? 0 : Math.max(SIDEBAR_MIN_WIDTH, regionRef.current.clientWidth);
+    drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth, moved: false };
   };
   const resizeSidebar = (event: PointerEvent<HTMLDivElement>) => {
     const active = drag.current;
     if (active?.pointerId !== event.pointerId || (!active.moved && Math.abs(event.clientX - active.startX) < 3)) return;
     active.moved = true;
-    const width = resizeWidth(event.clientX, active);
-    setDragWidth(active.startWidth > 0 && width <= SIDEBAR_COLLAPSE_WIDTH ? 0 : width);
+    setDragWidth(resizeWidth(event.clientX, active));
   };
   const finishResize = (event: PointerEvent<HTMLDivElement>, cancelled = false) => {
     const active = drag.current;
     if (active?.pointerId !== event.pointerId) return;
     if (!cancelled && active.moved) {
       const width = resizeWidth(event.clientX, active);
-      saveSidebar(width <= SIDEBAR_COLLAPSE_WIDTH
+      saveSidebar(width === 0
         ? { ...sidebar, collapsed: true }
-        : { width: Math.max(SIDEBAR_MIN_WIDTH, width), collapsed: false });
+        : { width, collapsed: false });
     }
     drag.current = null;
     setDragWidth(null);
