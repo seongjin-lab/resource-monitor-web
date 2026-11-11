@@ -4,6 +4,7 @@ import uPlot from 'uplot';
 import { allTags, api, MetricDef, METRICS, Series } from '../api';
 import { Chart, ChartZoomReset } from '../components/Chart';
 import { EmptyState, RangePicker, Segmented } from '../components/Common';
+import { RefreshInterval } from '../components/RefreshInterval';
 import { appendSample, onSample, useLive } from '../live';
 import { metricZoomParam, useMetricZoom } from '../metricZoom';
 import { describeBucket, describeRange, parseRange, RangeSpec, rangeParams, resolveRange } from '../range';
@@ -229,6 +230,7 @@ export default function Compare() {
         <div>
           <h1>비교</h1>
           <p className="subtitle">여러 서버의 같은 지표를 한 그래프에 겹쳐 봅니다. 서버 수에 제한이 없습니다.</p>
+          <RefreshInterval />
         </div>
       </div>
       <div className="toolbar compare-toolbar">

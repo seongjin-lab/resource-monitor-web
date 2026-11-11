@@ -49,11 +49,14 @@ export async function refreshSettings() {
   }
 }
 
-export async function saveSettings(settings: Settings) {
+async function applySavedSettings(request: Promise<Settings>) {
   const previous = snapshot.settings;
-  const saved = await api.saveSettings(settings);
+  const saved = await request;
   if (snapshot.settings === previous) update({ settings: saved });
 }
+
+export const saveSettings = (settings: Settings) => applySavedSettings(api.saveSettings(settings));
+export const saveInterval = (seconds: number) => applySavedSettings(api.saveInterval(seconds));
 
 let started = false;
 

@@ -227,6 +227,22 @@ api.MapGet("/samples/recent", (int? minutes, int? points, ServerStore store, Sam
 var settingsWriteLock = new object();
 api.MapGet("/settings", (SettingsStore settings) => new { settings.Current, AppSettings.IntervalChoices });
 
+api.MapPut("/settings/interval", (IntervalInput input, SettingsStore settings, EventBroker broker) =>
+{
+    lock (settingsWriteLock)
+    {
+        var saved = settings.Current with { IntervalSeconds = input.IntervalSeconds };
+        if (saved.Validate() is { } error)
+        {
+            return Fail(error);
+        }
+
+        settings.Save(saved);
+        broker.Publish("settings", saved);
+        return Results.Ok(saved);
+    }
+});
+
 api.MapPut("/settings", (AppSettings input, SettingsStore settings, EventBroker broker) =>
 {
     if (input.Validate() is { } error)
@@ -431,5 +447,7 @@ public sealed record ServerInput(Guid? Id, string? Name, string? Host, int? Port
     string? Password, string? PrivateKey, string? Passphrase, string? Fingerprint, bool? Enabled, string[]? Tags);
 
 public sealed record EnabledInput(bool Enabled);
+
+public sealed record IntervalInput(int IntervalSeconds);
 
 public sealed record Credentials(string AuthType, byte[] Secret, byte[]? PrivateKey);

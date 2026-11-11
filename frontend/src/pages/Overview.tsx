@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useDialogs } from '../App';
 import { allTags, formatValue, METRICS, ServerStatus, warnLevel } from '../api';
 import { EmptyState, Segmented, StatusChip, TagFilter, TagList } from '../components/Common';
+import { RefreshInterval } from '../components/RefreshInterval';
 import { useLive } from '../live';
 import { relativeAgo } from '../range';
 
@@ -81,7 +82,7 @@ export default function Overview() {
       <div className="page-header">
         <div>
           <h1>전체 현황</h1>
-          {live.settings && <p className="subtitle">{live.settings.intervalSeconds}초마다 갱신</p>}
+          <RefreshInterval />
         </div>
         <div className="summary">
           <span className="hint">전체 서버 {cards.length}대</span>

@@ -5,6 +5,7 @@ import { api, formatValue, MetricDef, METRICS, Series, warnLevel } from '../api'
 import { Chart, ChartZoomReset } from '../components/Chart';
 import { EmptyState, RangePicker, StatusChip, TagList, toast } from '../components/Common';
 import { deleteServerWithConfirm } from '../components/Dialogs';
+import { RefreshInterval } from '../components/RefreshInterval';
 import { refreshServers, useLive, useSeries } from '../live';
 import { useMetricZoom } from '../metricZoom';
 import { describeBucket, describeRange, parseRange, RangeSpec, rangeParams, relativeAgo } from '../range';
@@ -121,6 +122,7 @@ export default function ServerDetail() {
           <p className="subtitle">
             {server.user}@{server.host}:{server.port} · 마지막 갱신 {relativeAgo(server.lastUtc)} <TagList tags={server.tags} colors={live.settings?.tagColors} />
           </p>
+          <RefreshInterval />
         </div>
         <div className="row">
           <button className="button ghost" onClick={copyLink}>링크 복사</button>

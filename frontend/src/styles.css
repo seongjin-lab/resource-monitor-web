@@ -137,6 +137,8 @@ code { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; word
 .page.narrow { max-width: 760px; }
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
 .subtitle { color: var(--muted); margin: 0; }
+.refresh-interval { display: inline-flex; align-items: center; gap: 7px; margin-top: 6px; color: var(--muted); font-size: 12.5px; }
+.refresh-interval select { padding: 3px 7px; background: var(--panel); }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0 8px; }
 .hint { color: var(--muted); font-size: 12.5px; margin: 4px 0; }

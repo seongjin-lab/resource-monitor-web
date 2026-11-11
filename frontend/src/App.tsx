@@ -51,7 +51,7 @@ export default function App() {
   const maxSidebarWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, viewportWidth - SIDEBAR_MIN_CONTENT));
   const sidebarWidth = Math.min(sidebar.width, maxSidebarWidth);
   const visibleWidth = dragWidth ?? (collapsed ? 0 : sidebarWidth);
-  const sidebarHidden = collapsed && dragWidth === null;
+  const sidebarHidden = visibleWidth === 0;
 
   useEffect(() => {
     const resize = () => setViewportWidth(innerWidth);
@@ -84,14 +84,15 @@ export default function App() {
     const active = drag.current;
     if (active?.pointerId !== event.pointerId || (!active.moved && Math.abs(event.clientX - active.startX) < 3)) return;
     active.moved = true;
-    setDragWidth(resizeWidth(event.clientX, active));
+    const width = resizeWidth(event.clientX, active);
+    setDragWidth(active.startWidth > 0 && width <= SIDEBAR_COLLAPSE_WIDTH ? 0 : width);
   };
   const finishResize = (event: PointerEvent<HTMLDivElement>, cancelled = false) => {
     const active = drag.current;
     if (active?.pointerId !== event.pointerId) return;
     if (!cancelled && active.moved) {
       const width = resizeWidth(event.clientX, active);
-      saveSidebar(width < SIDEBAR_COLLAPSE_WIDTH
+      saveSidebar(width <= SIDEBAR_COLLAPSE_WIDTH
         ? { ...sidebar, collapsed: true }
         : { width: Math.max(SIDEBAR_MIN_WIDTH, width), collapsed: false });
     }

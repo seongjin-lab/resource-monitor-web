@@ -120,6 +120,7 @@ export const api = {
   csvUrl: (id: string, from: number, to: number) =>
     `/api/servers/${id}/samples.csv?from=${Math.floor(from)}&to=${Math.ceil(to)}`,
   settings: () => request<{ current: Settings; intervalChoices: number[] }>('/api/settings'),
+  saveInterval: (intervalSeconds: number) => request<Settings>('/api/settings/interval', json('PUT', { intervalSeconds })),
   saveSettings: (settings: Settings) => request<Settings>('/api/settings', json('PUT', settings)),
 };
 
