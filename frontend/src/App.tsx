@@ -52,12 +52,7 @@ export default function App() {
       value={{ openServer: (server) => setDialog({ kind: 'server', server }), openImport: () => setDialog({ kind: 'import' }) }}
     >
       <div className={`layout ${collapsed ? 'collapsed' : ''}`}>
-        {collapsed && (
-          <button className="sidebar-open" onClick={() => toggleSidebar(false)} title="사이드바 열기" aria-label="사이드바 열기">
-            ☰
-          </button>
-        )}
-        <aside className="sidebar" hidden={collapsed}>
+        <aside id="server-sidebar" className="sidebar" hidden={collapsed}>
           <div className="brand">
             <Link to="/" className="brand-link" aria-label="리소스 모니터 전체 현황">
               <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden>
@@ -65,9 +60,6 @@ export default function App() {
               </svg>
               리소스 모니터
             </Link>
-            <button className="icon-button sidebar-close" onClick={() => toggleSidebar(true)} title="사이드바 닫기" aria-label="사이드바 닫기">
-              «
-            </button>
           </div>
           <nav className="nav">
             <NavLink to="/" end>전체 현황</NavLink>
@@ -135,6 +127,16 @@ export default function App() {
             {live.connected ? '● 실시간 연결됨' : '○ 서버와 연결이 끊겼습니다. 다시 연결하는 중…'}
           </div>
         </aside>
+        <div className="sidebar-divider">
+          <button type="button" className="sidebar-toggle" onClick={() => toggleSidebar(!collapsed)}
+            aria-controls="server-sidebar" aria-expanded={!collapsed}
+            aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="m14 6-6 6 6 6" />
+            </svg>
+          </button>
+        </div>
         <main className="content">
           <Routes>
             <Route path="/" element={<Overview />} />
