@@ -113,7 +113,8 @@ code { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; word
   width: 3px; background: color-mix(in srgb, var(--accent) 70%, var(--border));
 }
 .sidebar-divider:is(:hover, :focus-visible)::after, .layout:is(.collapsed, .resizing) .sidebar-divider::after { opacity: 1; }
-.sidebar-divider:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sidebar-divider:focus-visible { outline: none; }
+.sidebar-divider:focus-visible::after { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
 .layout.collapsed .sidebar-divider::before { left: 1px; }
 .layout.collapsed .sidebar-divider::after { left: 5px; }
 .layout.resizing, .layout.resizing * { cursor: col-resize; user-select: none; }
