@@ -14,8 +14,10 @@ public sealed class MonitorService(
     SampleStore samples,
     SampleWriter writer,
     LiveState live,
+    EventBroker broker,
     ILogger<MonitorService> logger) : BackgroundService
 {
+    private const int ConnectionFailureLimit = 5;
     private readonly Dictionary<Guid, Worker> workers = new();
     private readonly SemaphoreSlim signal = new(0);
     private DateTime lastPurge = DateTime.MinValue;
@@ -68,25 +70,54 @@ public sealed class MonitorService(
                     live.Remove(id);
                 }
             }
+            else if (worker.Task.IsCompletedSuccessfully && worker.Task.Result is { } reason)
+            {
+                if (servers.TryDisable(server))
+                {
+                    current[id] = server with { Enabled = false };
+                    live.SetState(id, LiveStates.Disabled, reason);
+                    broker.Publish("servers", new { });
+                    logger.LogWarning("{Server} 서버의 수집을 자동으로 껐습니다. {Reason}", server.Name, reason);
+                }
+                else
+                {
+                    current.Remove(id);
+                    RequestReconcile();
+                }
+
+                workers.Remove(id);
+            }
         }
 
         foreach (var server in current.Values)
         {
             if (!server.Enabled)
             {
-                live.SetState(server.Id, LiveStates.Disabled);
+                if (live.Get(server.Id).State != LiveStates.Disabled)
+                {
+                    live.SetState(server.Id, LiveStates.Disabled);
+                }
+
                 continue;
             }
 
             if (!workers.ContainsKey(server.Id))
             {
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                workers[server.Id] = new Worker(server, cancellation, Task.Run(() => RunAsync(server, cancellation.Token)));
+                var task = Task.Run(() => RunAsync(server, cancellation.Token));
+                workers[server.Id] = new Worker(server, cancellation, task);
+                _ = task.ContinueWith(completed =>
+                {
+                    if (completed.Result is not null)
+                    {
+                        RequestReconcile();
+                    }
+                }, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
             }
         }
     }
 
-    private async Task RunAsync(ServerRecord server, CancellationToken cancellationToken)
+    private async Task<string?> RunAsync(ServerRecord server, CancellationToken cancellationToken)
     {
         live.SetState(server.Id, LiveStates.Connecting);
         SshTarget target;
@@ -98,7 +129,7 @@ public sealed class MonitorService(
         {
             logger.LogWarning(error, "{Server} 인증 정보를 복호화하지 못했습니다.", server.Name);
             live.SetState(server.Id, LiveStates.Error, "저장된 인증 정보를 열 수 없습니다. 서버 설정에서 비밀번호나 키를 다시 입력하세요.");
-            return;
+            return null;
         }
 
         using var collector = new SshCollector(target);
@@ -106,6 +137,8 @@ public sealed class MonitorService(
         RootDirectoryUsage? rootDirectories = null;
         long lastDirectoryScan = 0;
         int failures = 0;
+        int connectionFailures = 0;
+        string? disableReason = null;
         while (!cancellationToken.IsCancellationRequested)
         {
             var current = settings.Current;
@@ -116,6 +149,7 @@ public sealed class MonitorService(
             {
                 var (values, specs) = await collector.ReadAsync(cancellationToken, Math.Max(15, interval * 3));
                 failures = 0;
+                connectionFailures = 0;
                 if (values.Cpu is { } cpu)
                 {
                     var sample = new Sample(server.Id, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), interval * 1000,
@@ -163,7 +197,15 @@ public sealed class MonitorService(
             catch (Exception error)
             {
                 failures++;
-                live.SetState(server.Id, LiveStates.Error, SshCollector.DescribeError(error));
+                connectionFailures = error is SshConnectFailureException ? connectionFailures + 1 : 0;
+                string message = SshCollector.DescribeError(error);
+                if (connectionFailures >= ConnectionFailureLimit)
+                {
+                    disableReason = $"SSH 접속이 {ConnectionFailureLimit}회 연속 실패해 수집을 자동으로 껐습니다. {message}";
+                    break;
+                }
+
+                live.SetState(server.Id, LiveStates.Error, message);
                 delay = TimeSpan.FromSeconds(Math.Min(60, interval * Math.Pow(2, Math.Min(failures, 6))));
             }
 
@@ -184,6 +226,8 @@ public sealed class MonitorService(
         {
             await directoryScan;
         }
+
+        return disableReason;
     }
 
     public SshTarget ToTarget(ServerRecord server)
@@ -214,5 +258,5 @@ public sealed class MonitorService(
         a.AuthType == b.AuthType && a.Secret.AsSpan().SequenceEqual(b.Secret) &&
         (a.PrivateKey ?? []).AsSpan().SequenceEqual(b.PrivateKey ?? []);
 
-    private sealed record Worker(ServerRecord Server, CancellationTokenSource Cancellation, Task Task);
+    private sealed record Worker(ServerRecord Server, CancellationTokenSource Cancellation, Task<string?> Task);
 }

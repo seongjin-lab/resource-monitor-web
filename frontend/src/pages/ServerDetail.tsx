@@ -141,7 +141,7 @@ export default function ServerDetail() {
           <button className="button danger" onClick={remove}>삭제</button>
         </div>
       </div>
-      {server.status === 'error' && <div className="banner error">{server.error}</div>}
+      {server.error && <div className="banner error">{server.error}</div>}
 
       <section aria-labelledby="current-metrics">
         <h2 id="current-metrics" className="detail-metrics-title">현재 측정값</h2>

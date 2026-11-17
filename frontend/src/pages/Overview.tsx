@@ -142,7 +142,7 @@ export default function Overview() {
                       ? <span className={`chip card-alert card-alert-${level}`}>{warnings.join(' · ')}</span>
                       : <StatusChip status={server.status} />}
                   </div>
-                  {server.status === 'error' && <div className="card-error">{server.error}</div>}
+                  {server.error && <div className="card-error">{server.error}</div>}
                   <div className="metric-row">
                     {metrics.map(({ key, label, value, unit, max, level }) => (
                       <div key={key} className={`metric level-${level}`}>

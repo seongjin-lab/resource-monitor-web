@@ -83,19 +83,18 @@ api.MapPut("/servers/{id:guid}", (Guid id, ServerInput input, ServerStore store,
     store.Update(Build(id, input, credentials!, store, enabled: input.Enabled ?? existing.Enabled) with
     {
         Tags = input.Tags is null ? existing.Tags : ServerRecord.NormalizeTags(input.Tags)
-    });
+    }, input.Enabled);
     Changed(monitor, broker);
     return Results.Ok(ToView(store.Get(id)!, live));
 });
 
 api.MapPut("/servers/{id:guid}/tags", (Guid id, string[] tags, ServerStore store, EventBroker broker) =>
 {
-    if (store.Get(id) is not { } existing)
+    if (!store.SetTags(id, ServerRecord.NormalizeTags(tags)))
     {
         return Results.NotFound();
     }
 
-    store.Update(existing with { Tags = ServerRecord.NormalizeTags(tags) });
     broker.Publish("servers", new { });
     return Results.NoContent();
 });
@@ -103,12 +102,11 @@ api.MapPut("/servers/{id:guid}/tags", (Guid id, string[] tags, ServerStore store
 api.MapPost("/servers/{id:guid}/enabled", (Guid id, EnabledInput input, ServerStore store, MonitorService monitor,
     EventBroker broker) =>
 {
-    if (store.Get(id) is not { } existing)
+    if (!store.SetEnabled(id, input.Enabled))
     {
         return Results.NotFound();
     }
 
-    store.Update(existing with { Enabled = input.Enabled });
     Changed(monitor, broker);
     return Results.NoContent();
 });

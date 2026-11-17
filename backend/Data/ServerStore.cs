@@ -60,21 +60,54 @@ public sealed class ServerStore(Database database, IDataProtectionProvider prote
             VALUES ($id, $name, $host, $port, $user, $fingerprint, $auth, $secret, $key, $enabled, $tags,
                 COALESCE((SELECT max(sort) + 1 FROM servers), 0))
             """;
-        Bind(command, server);
+        Bind(command, server, server.Enabled);
         command.ExecuteNonQuery();
     }
 
-    public void Update(ServerRecord server)
+    public void Update(ServerRecord server, bool? enabled)
     {
         using var connection = database.Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
             UPDATE servers SET name=$name, host=$host, port=$port, user=$user, fingerprint=$fingerprint,
-                auth_type=$auth, secret=$secret, private_key=$key, enabled=$enabled, tags=$tags
+                auth_type=$auth, secret=$secret, private_key=$key, enabled=COALESCE($enabled, enabled), tags=$tags
             WHERE id=$id
             """;
-        Bind(command, server);
+        Bind(command, server, enabled);
         command.ExecuteNonQuery();
+    }
+
+    public bool SetTags(Guid id, IReadOnlyList<string> tags)
+    {
+        using var connection = database.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE servers SET tags = $tags WHERE id = $id";
+        command.Parameters.AddWithValue("$id", id.ToString("N"));
+        command.Parameters.AddWithValue("$tags", System.Text.Json.JsonSerializer.Serialize(tags));
+        return command.ExecuteNonQuery() > 0;
+    }
+
+    public bool SetEnabled(Guid id, bool enabled)
+    {
+        using var connection = database.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE servers SET enabled = $enabled WHERE id = $id";
+        command.Parameters.AddWithValue("$id", id.ToString("N"));
+        command.Parameters.AddWithValue("$enabled", enabled ? 1 : 0);
+        return command.ExecuteNonQuery() > 0;
+    }
+
+    public bool TryDisable(ServerRecord server)
+    {
+        using var connection = database.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE servers SET enabled = 0
+            WHERE id = $id AND enabled = 1 AND host = $host AND port = $port AND user = $user
+                AND fingerprint = $fingerprint AND auth_type = $auth AND secret = $secret AND private_key IS $key
+            """;
+        BindConnection(command, server);
+        return command.ExecuteNonQuery() > 0;
     }
 
     public bool Delete(Guid id)
@@ -114,10 +147,17 @@ public sealed class ServerStore(Database database, IDataProtectionProvider prote
         transaction.Commit();
     }
 
-    private static void Bind(SqliteCommand command, ServerRecord server)
+    private static void Bind(SqliteCommand command, ServerRecord server, bool? enabled)
+    {
+        BindConnection(command, server);
+        command.Parameters.AddWithValue("$name", server.Name);
+        command.Parameters.AddWithValue("$enabled", (object?)enabled ?? DBNull.Value);
+        command.Parameters.AddWithValue("$tags", System.Text.Json.JsonSerializer.Serialize(server.Tags));
+    }
+
+    private static void BindConnection(SqliteCommand command, ServerRecord server)
     {
         command.Parameters.AddWithValue("$id", server.Id.ToString("N"));
-        command.Parameters.AddWithValue("$name", server.Name);
         command.Parameters.AddWithValue("$host", server.Host);
         command.Parameters.AddWithValue("$port", server.Port);
         command.Parameters.AddWithValue("$user", server.User);
@@ -125,8 +165,6 @@ public sealed class ServerStore(Database database, IDataProtectionProvider prote
         command.Parameters.AddWithValue("$auth", server.AuthType);
         command.Parameters.AddWithValue("$secret", server.Secret);
         command.Parameters.AddWithValue("$key", (object?)server.PrivateKey ?? DBNull.Value);
-        command.Parameters.AddWithValue("$enabled", server.Enabled ? 1 : 0);
-        command.Parameters.AddWithValue("$tags", System.Text.Json.JsonSerializer.Serialize(server.Tags));
     }
 
     private static ServerRecord Read(SqliteDataReader reader) => new(

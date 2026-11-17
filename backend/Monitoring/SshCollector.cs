@@ -86,9 +86,11 @@ public sealed class SshCollector(SshTarget target) : IDisposable
     public async Task<(MetricValues Values, ServerSpecs Specs)> ReadAsync(
         CancellationToken cancellationToken, double maxSampleAgeSeconds = 15)
     {
+        bool connected = false;
         try
         {
             await ConnectAsync(cancellationToken).ConfigureAwait(false);
+            connected = true;
             string output = await RunAsync(ReadCounters, cancellationToken).ConfigureAwait(false);
             var counters = ParseCounters(output);
             double? cpu = null;
@@ -125,9 +127,14 @@ public sealed class SshCollector(SshTarget target) : IDisposable
             return (new MetricValues(cpu, counters.MemoryPercent, diskCapacity.UsedPercent, diskIo),
                 new ServerSpecs(counters.LogicalCores, counters.MemoryKiB, diskCapacity.TotalKiB));
         }
-        catch
+        catch (Exception error)
         {
             Dispose();
+            if (!connected && !cancellationToken.IsCancellationRequested)
+            {
+                throw new SshConnectFailureException(error);
+            }
+
             throw;
         }
     }
@@ -364,6 +371,7 @@ public sealed class SshCollector(SshTarget target) : IDisposable
 
     public static string DescribeError(Exception error) => error switch
     {
+        SshConnectFailureException failure => DescribeError(failure.InnerException!),
         HostKeyMismatchException mismatch =>
             $"SSH 호스트 키가 저장된 지문과 다릅니다. 서버가 제시한 지문 SHA256:{mismatch.Fingerprint}",
         InvalidDataException => error.Message,
@@ -391,6 +399,8 @@ public sealed class SshCollector(SshTarget target) : IDisposable
         long? LogicalCores, long MemoryKiB, Dictionary<string, long> Disks);
     private sealed record ProcessCounters(int Pid, long Start, long Ticks, long RssPages, string Name);
 }
+
+internal sealed class SshConnectFailureException(Exception innerException) : Exception(innerException.Message, innerException);
 
 public sealed class HostKeyMismatchException(string fingerprint) : Exception
 {
