@@ -243,7 +243,7 @@ api.MapPut("/settings/interval", (IntervalInput input, SettingsStore settings, E
     }
 });
 
-api.MapPut("/settings", (AppSettings input, SettingsStore settings, EventBroker broker) =>
+api.MapPut("/settings", (AppSettings input, SettingsStore settings, ServerStore servers, EventBroker broker) =>
 {
     if (input.Validate() is { } error)
     {
@@ -266,7 +266,29 @@ api.MapPut("/settings", (AppSettings input, SettingsStore settings, EventBroker 
             }
         }
 
-        var saved = input with { TagColors = colors };
+        var serverWarnings = new Dictionary<Guid, WarningThresholds?>(settings.Current.ServerWarnings);
+        foreach (var (id, warnings) in input.ServerWarnings)
+        {
+            if (warnings is null)
+            {
+                serverWarnings.Remove(id);
+            }
+            else
+            {
+                serverWarnings[id] = warnings;
+            }
+        }
+
+        if (serverWarnings.Count > 0)
+        {
+            var serverIds = servers.List().Select(server => server.Id).ToHashSet();
+            foreach (var id in serverWarnings.Keys.Where(id => !serverIds.Contains(id)).ToArray())
+            {
+                serverWarnings.Remove(id);
+            }
+        }
+
+        var saved = input with { TagColors = colors, ServerWarnings = serverWarnings };
         settings.Save(saved);
         broker.Publish("settings", saved);
         return Results.Ok(saved);

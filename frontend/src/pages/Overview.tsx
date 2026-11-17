@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useDialogs } from '../App';
-import { allTags, formatValue, METRICS, ServerStatus, warnLevel } from '../api';
+import { allTags, formatValue, METRICS, ServerStatus, serverWarningThresholds, warnLevel } from '../api';
 import { EmptyState, Segmented, StatusChip, TagFilter, TagList } from '../components/Common';
 import { RefreshInterval } from '../components/RefreshInterval';
 import { useLive } from '../live';
@@ -29,12 +29,13 @@ export default function Overview() {
   };
 
   const cards = useMemo(() => live.servers.map((server) => {
+    const thresholds = serverWarningThresholds(live.settings, server.id);
     const metrics = METRICS.map((metric) => {
       const value = server.latest?.[metric.key];
       return {
         ...metric,
         value,
-        level: server.status === 'ok' ? warnLevel(metric, value, live.settings) : 'normal' as const,
+        level: server.status === 'ok' ? warnLevel(metric, value, thresholds) : 'normal' as const,
       };
     });
     return { server, metrics, level: serverLevel(server.status, metrics.map((metric) => metric.level)) };
@@ -148,7 +149,9 @@ export default function Overview() {
                         <span className="metric-label">{label}</span>
                         <span className="metric-value">{server.status === 'disabled' ? '–' : formatValue(value, unit)}</span>
                         {max && value != null && server.status !== 'disabled' && (
-                          <span className="bar"><span style={{ width: `${Math.min(100, value)}%` }} /></span>
+                          <span className="bar" aria-hidden="true">
+                            <span style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+                          </span>
                         )}
                       </div>
                     ))}

@@ -1,13 +1,17 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
-import { allTags, criticalThreshold, METRICS, Settings } from '../api';
+import { allTags, criticalThreshold, METRICS, Settings, WarningThresholds } from '../api';
 import { Modal } from '../components/Dialogs';
 import { saveSettings, useLive } from '../live';
 import { getTagColor, TAG_PALETTE, tagColorStyle } from '../tagColors';
 
 const RETENTION_MAX = 3650;
 const WARN_MAX = 100;
-type NumericSetting = Exclude<keyof Settings, 'tagColors'>;
+type WarningKey = keyof WarningThresholds;
+type WarningDraft = Record<WarningKey, string>;
+type ServerWarningDraft = WarningDraft & { enabled: boolean };
+type NumericSetting = WarningKey | 'intervalSeconds' | 'retentionDays';
+const WARNING_METRICS = METRICS.flatMap(({ label, warnKey }) => warnKey ? [{ label, key: warnKey }] : []);
 
 function numberError(value: string, max: number, unit: string, integer = false) {
   if (value === '') return '값을 입력하세요.';
@@ -50,16 +54,66 @@ function NumberSetting({ id, label, value, max, hint, error, integer = false, di
   );
 }
 
+function warningDraft(thresholds: WarningThresholds): WarningDraft {
+  return { cpuWarn: String(thresholds.cpuWarn), memoryWarn: String(thresholds.memoryWarn), diskWarn: String(thresholds.diskWarn) };
+}
+
+function warningFields(value: (key: WarningKey) => string) {
+  return WARNING_METRICS.map(({ key, label }) => {
+    const input = value(key);
+    return { key, label, input, error: numberError(input, WARN_MAX, '%') };
+  });
+}
+
+function WarningFields({ fields, prefix, disabled, onChange }: {
+  fields: ReturnType<typeof warningFields>;
+  prefix: string;
+  disabled: boolean;
+  onChange: (key: WarningKey, input: string) => void;
+}) {
+  return (
+    <div className="settings-thresholds">
+      {fields.map(({ key, label, input, error }) => {
+        const warn = Number(input);
+        return (
+          <div className="settings-threshold" key={key}>
+            <NumberSetting id={`${prefix}${key}`} label={label} value={input} max={WARN_MAX}
+              disabled={disabled} error={error} hint={`1~${WARN_MAX}%`} onChange={(input) => onChange(key, input)} />
+            {!error && (
+              <div className="settings-threshold-preview">
+                <span className="settings-warn">경고 {warn}%</span>
+                <span className="settings-critical">위험 {criticalThreshold(warn)}%</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { settings, intervalChoices, servers } = useLive();
   const [draft, setDraft] = useState<Partial<Record<NumericSetting, string>>>({});
   const [tagColorDraft, setTagColorDraft] = useState(new Map<string, string | null>());
+  const [serverId, setServerId] = useState('');
+  const [serverWarningDrafts, setServerWarningDrafts] = useState<Partial<Record<string, ServerWarningDraft>>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const colorChanges = [...tagColorDraft].filter(([tag, color]) => color !== getTagColor(settings?.tagColors, tag));
-  const dirty = settings != null && (colorChanges.length > 0 || (Object.keys(draft) as NumericSetting[])
+  const serverChanges = servers.flatMap((server) => {
+    const { id } = server;
+    const edited = serverWarningDrafts[id];
+    const saved = settings?.serverWarnings?.[id];
+    if (!edited) return [];
+    const previouslyEnabled = saved != null && saved.enabled !== false;
+    const changed = edited.enabled !== previouslyEnabled || (edited.enabled &&
+      WARNING_METRICS.some(({ key }) => edited[key] === '' || Number(edited[key]) !== saved?.[key]));
+    return changed ? [{ server, edited, saved }] : [];
+  });
+  const dirty = settings != null && (colorChanges.length > 0 || serverChanges.length > 0 || (Object.keys(draft) as NumericSetting[])
     .some((key) => draft[key] === '' || Number(draft[key]) !== settings[key]));
   const blocker = useBlocker(({ currentLocation, nextLocation }) =>
     (dirty || saving) && currentLocation.pathname !== nextLocation.pathname,
@@ -96,6 +150,7 @@ export default function SettingsPage() {
   const reset = () => {
     setDraft({});
     setTagColorDraft(new Map());
+    setServerWarningDrafts({});
     setSaved(false);
     setSaveError(null);
   };
@@ -103,16 +158,22 @@ export default function SettingsPage() {
   const retention = value('retentionDays');
   const tags = allTags(servers);
   const retentionError = numberError(retention, RETENTION_MAX, '일', true);
-  const thresholds = METRICS.flatMap(({ label, warnKey }) => {
-    if (!warnKey) return [];
-    const input = value(warnKey);
-    return [{
-      key: warnKey,
-      label,
-      input,
-      error: numberError(input, WARN_MAX, '%'),
-    }];
-  });
+  const thresholds = warningFields(value);
+  const selectedServer = servers.find(({ id }) => id === serverId) ?? servers[0];
+  const selectedId = selectedServer?.id ?? '';
+  const savedServerWarnings = settings.serverWarnings?.[selectedId];
+  const serverWarnings = serverWarningDrafts[selectedId] ?? {
+    ...warningDraft(savedServerWarnings ?? settings),
+    enabled: savedServerWarnings != null && savedServerWarnings.enabled !== false,
+  };
+  const invalidServer = serverChanges.find(({ edited }) =>
+    edited.enabled && warningFields((key) => edited[key]).some(({ error }) => error),
+  )?.server;
+  const setServerWarnings = (warnings: ServerWarningDraft) => {
+    setServerWarningDrafts((current) => ({ ...current, [selectedId]: warnings }));
+    setSaved(false);
+    setSaveError(null);
+  };
   const next: Settings = {
     intervalSeconds: Number(value('intervalSeconds')),
     retentionDays: Number(retention),
@@ -120,8 +181,17 @@ export default function SettingsPage() {
     memoryWarn: Number(value('memoryWarn')),
     diskWarn: Number(value('diskWarn')),
     tagColors: Object.fromEntries(colorChanges),
+    serverWarnings: Object.fromEntries(serverChanges.map(({ server, edited, saved }) => {
+      const previous = saved ?? settings;
+      return [server.id, {
+        enabled: edited.enabled,
+        cpuWarn: edited.enabled ? Number(edited.cpuWarn) : previous.cpuWarn,
+        memoryWarn: edited.enabled ? Number(edited.memoryWarn) : previous.memoryWarn,
+        diskWarn: edited.enabled ? Number(edited.diskWarn) : previous.diskWarn,
+      }];
+    })),
   };
-  const canSave = dirty && !saving && !retentionError &&
+  const canSave = dirty && !saving && !retentionError && !invalidServer &&
     intervalChoices.includes(next.intervalSeconds) && thresholds.every(({ error }) => !error);
   const shorterRetention = !retentionError && next.retentionDays < settings.retentionDays;
 
@@ -134,6 +204,7 @@ export default function SettingsPage() {
       await saveSettings(next);
       setDraft({});
       setTagColorDraft(new Map());
+      setServerWarningDrafts({});
       setSaved(true);
     } catch (reason) {
       setSaveError((reason as Error).message);
@@ -172,25 +243,34 @@ export default function SettingsPage() {
             <div>저장하면 다음 자동 정리에서 {next.retentionDays}일이 지난 기록이 삭제됩니다.</div>
           </div>
         )}
-        <h2>경고 기준</h2>
-        <p className="hint">경고는 노란색, 위험은 빨간색으로 표시합니다.</p>
-        <div className="settings-thresholds">
-          {thresholds.map(({ key, label, input, error }) => {
-            const warn = Number(input);
-            return (
-              <div className="settings-threshold" key={key}>
-                <NumberSetting id={key} label={label} value={input} max={WARN_MAX}
-                  disabled={saving} error={error} hint={`1~${WARN_MAX}%`} onChange={(input) => set(key, input)} />
-                {!error && (
-                  <div className="settings-threshold-preview">
-                    <span className="settings-warn">경고 {warn}%</span>
-                    <span className="settings-critical">위험 {criticalThreshold(warn)}%</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <h2>공통 경고 기준</h2>
+        <p className="hint">개별 기준을 사용하지 않는 서버에 적용됩니다.</p>
+        <WarningFields fields={thresholds} prefix="" disabled={saving} onChange={set} />
+        <h2>서버별 경고 기준</h2>
+        {selectedServer ? (
+          <>
+            <div className="field">
+              <label htmlFor="warning-server">서버</label>
+              <select id="warning-server" value={selectedId} disabled={saving} onChange={(event) => setServerId(event.target.value)}>
+                {servers.map(({ id, name, host }) => <option key={id} value={id}>{name} ({host})</option>)}
+              </select>
+            </div>
+            <div className="row">
+              <button type="button" className={`button ${serverWarnings.enabled ? 'primary' : 'ghost'}`}
+                role="switch" aria-checked={serverWarnings.enabled} disabled={saving}
+                onClick={() => setServerWarnings({ ...serverWarnings, enabled: !serverWarnings.enabled })}>
+                개별 기준 사용 <span aria-hidden="true">{serverWarnings.enabled ? '켜짐' : '꺼짐'}</span>
+              </button>
+            </div>
+            {serverWarnings.enabled && (
+              <WarningFields fields={warningFields((key) => serverWarnings[key])} prefix="server-" disabled={saving}
+                onChange={(key, input) => setServerWarnings({ ...serverWarnings, [key]: input })} />
+            )}
+          </>
+        ) : <p className="hint">서버를 등록하면 개별 기준을 설정할 수 있습니다.</p>}
+        {invalidServer && invalidServer.id !== selectedId && (
+          <p className="settings-critical" role="alert">{invalidServer.name} 서버의 경고 기준을 확인하세요.</p>
+        )}
         <h2>태그 색상</h2>
         <p className="hint">태그마다 색을 고를 수 있습니다. 자동을 선택하면 태그 이름에 따라 색이 정해집니다.</p>
         {tags.length === 0 && <p className="hint">서버에 태그를 추가하면 여기에서 색을 설정할 수 있습니다.</p>}

@@ -51,13 +51,21 @@ export interface Series {
   io: (number | null)[];
 }
 
-export interface Settings {
-  intervalSeconds: number;
-  retentionDays: number;
+export interface WarningThresholds {
   cpuWarn: number;
   memoryWarn: number;
   diskWarn: number;
+}
+
+export interface ServerWarningSettings extends WarningThresholds {
+  enabled?: boolean;
+}
+
+export interface Settings extends WarningThresholds {
+  intervalSeconds: number;
+  retentionDays: number;
   tagColors?: TagColors;
+  serverWarnings?: Record<string, ServerWarningSettings | null>;
 }
 
 export type TagColors = Record<string, string | null>;
@@ -87,7 +95,7 @@ export interface MetricDef {
   label: string;
   unit: '%' | 'MB/s';
   max?: number;
-  warnKey?: 'cpuWarn' | 'memoryWarn' | 'diskWarn';
+  warnKey?: keyof WarningThresholds;
 }
 
 export const METRICS: MetricDef[] = [
@@ -158,7 +166,12 @@ export function criticalThreshold(warn: number): number {
   return Math.min(100, warn + (100 - warn) / 2);
 }
 
-export function warnLevel(metric: MetricDef, value: number | null | undefined, settings: Settings | null):
+export function serverWarningThresholds(settings: Settings | null, serverId: string): WarningThresholds | null {
+  const warnings = settings?.serverWarnings?.[serverId];
+  return warnings && warnings.enabled !== false ? warnings : settings;
+}
+
+export function warnLevel(metric: MetricDef, value: number | null | undefined, settings: WarningThresholds | null):
   'normal' | 'warn' | 'critical' {
   if (value == null || !metric.warnKey || !settings) return 'normal';
   const warn = settings[metric.warnKey];

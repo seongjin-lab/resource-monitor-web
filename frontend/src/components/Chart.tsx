@@ -21,7 +21,7 @@ interface Props {
   series: ChartSeries[];
   unit: '%' | 'MB/s';
   max?: number;
-  warn?: number;
+  warn?: number | number[];
   height?: number;
   spanGaps?: boolean;
   cursorTooltip?: boolean;
@@ -68,7 +68,7 @@ export function Chart(props: Props) {
 
   useEffect(() => {
     const element = container.current!;
-    const warn = props.warn;
+    const warnings = typeof props.warn === 'number' ? [props.warn] : props.warn ?? [];
     if (props.cursorTooltip) setHover(null);
     const options: uPlot.Options = {
       width: element.clientWidth || 600,
@@ -172,16 +172,18 @@ export function Chart(props: Props) {
         ],
         draw: [
           (u) => {
-            if (warn == null) return;
-            const y = u.valToPos(warn, 'y', true);
+            if (warnings.length === 0) return;
             const { ctx, bbox } = u;
             ctx.save();
             ctx.strokeStyle = 'rgba(245,184,74,0.7)';
             ctx.setLineDash([6, 4]);
             ctx.lineWidth = devicePixelRatio;
             ctx.beginPath();
-            ctx.moveTo(bbox.left, y);
-            ctx.lineTo(bbox.left + bbox.width, y);
+            for (const warn of warnings) {
+              const y = u.valToPos(warn, 'y', true);
+              ctx.moveTo(bbox.left, y);
+              ctx.lineTo(bbox.left + bbox.width, y);
+            }
             ctx.stroke();
             ctx.restore();
           },

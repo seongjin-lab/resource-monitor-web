@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDialogs } from '../App';
-import { api, formatValue, MetricDef, METRICS, Series, warnLevel } from '../api';
+import { api, formatValue, MetricDef, MetricKey, METRICS, Series, serverWarningThresholds, warnLevel } from '../api';
 import { Chart, ChartZoomReset } from '../components/Chart';
 import { EmptyState, RangePicker, StatusChip, TagList, toast } from '../components/Common';
 import { deleteServerWithConfirm } from '../components/Dialogs';
@@ -95,11 +95,18 @@ export default function ServerDetail() {
   };
 
   const bucket = data ? describeBucket(data.bucketMs) : null;
+  const thresholds = serverWarningThresholds(live.settings, server.id);
   const metrics = METRICS.map((metric) => {
     const value = server.latest?.[metric.key];
-    return { metric, value, level: server.status === 'ok' ? warnLevel(metric, value, live.settings) : 'normal' as const };
+    return { metric, value, level: server.status === 'ok' ? warnLevel(metric, value, thresholds) : 'normal' as const };
   });
   const warnings = metrics.filter(({ level }) => level !== 'normal');
+  const { logicalCores, memoryKiB, rootDiskKiB } = server.specs ?? {};
+  const metricSpecs: Partial<Record<MetricKey, string>> = {
+    cpu: `논리 코어 ${logicalCores == null ? '–' : `${logicalCores}개`}`,
+    memory: `총 메모리 ${formatValue(memoryKiB == null ? null : memoryKiB / 1024 ** 2, 'GiB')}`,
+    disk: `루트(/) 총 용량 ${formatValue(rootDiskKiB == null ? null : rootDiskKiB / 1024 ** 2, 'GiB')}`,
+  };
   const processWarnings = warnings.filter(({ metric }) => metric.key === 'cpu' || metric.key === 'memory');
   const diskWarning = warnings.some(({ metric }) => metric.key === 'disk');
   const rootDirectories = server.rootDirectories;
@@ -125,13 +132,6 @@ export default function ServerDetail() {
           <p className="subtitle">
             {server.user}@{server.host}:{server.port} <TagList tags={server.tags} colors={live.settings?.tagColors} />
           </p>
-          {server.specs ? (
-            <p className="row hint">
-              <span>논리 코어 {server.specs.logicalCores == null ? '–' : `${server.specs.logicalCores}개`}</span>
-              <span>총 메모리 {formatValue(server.specs.memoryKiB / 1024 ** 2, 'GiB')}</span>
-              <span>루트 디스크(/) {formatValue(server.specs.rootDiskKiB == null ? null : server.specs.rootDiskKiB / 1024 ** 2, 'GiB')}</span>
-            </p>
-          ) : <p className="hint">서버 사양 미수집</p>}
           <RefreshInterval />
         </div>
         <div className="row">
@@ -150,6 +150,7 @@ export default function ServerDetail() {
             <div key={metric.key} className={`tile level-${level}`}>
               <span className="metric-label">{metric.label}</span>
               <span className="tile-value">{formatValue(value, metric.unit)}</span>
+              {metricSpecs[metric.key] && <span className="tile-spec">{metricSpecs[metric.key]}</span>}
             </div>
           ))}
         </div>
@@ -239,7 +240,7 @@ export default function ServerDetail() {
           <div className="chart-grid">
             {METRICS.map((metric) => (
               <DetailMetricChart key={metric.key} serverId={server.id} metric={metric} data={data} range={range} bounds={bounds}
-                warn={metric.warnKey && live.settings ? live.settings[metric.warnKey] : undefined} />
+                warn={metric.warnKey ? thresholds?.[metric.warnKey] : undefined} />
             ))}
           </div>
         )

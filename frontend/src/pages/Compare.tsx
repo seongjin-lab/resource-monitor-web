@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import uPlot from 'uplot';
-import { allTags, api, MetricDef, METRICS, Series } from '../api';
+import { allTags, api, MetricDef, METRICS, Series, serverWarningThresholds, WarningThresholds } from '../api';
 import { Chart, ChartZoomReset } from '../components/Chart';
 import { EmptyState, RangePicker, Segmented } from '../components/Common';
 import { RefreshInterval } from '../components/RefreshInterval';
@@ -63,16 +63,15 @@ function useComparisonSeries(selected: string[], range?: RangeSpec) {
   return result?.key === key ? result : undefined;
 }
 
-type ComparisonSource = { id: string; label: string; color: string };
+type ComparisonSource = { id: string; label: string; color: string; thresholds: WarningThresholds | null };
 
-function ComparisonMetricChart({ metric, sources, data, xRange, rangeLabel, bucket, warn, showAll, onSharedZoom }: {
+function ComparisonMetricChart({ metric, sources, data, xRange, rangeLabel, bucket, showAll, onSharedZoom }: {
   metric: MetricDef;
   sources: ComparisonSource[];
   data: Record<string, Series>;
   xRange: { from: number; to: number };
   rangeLabel: string;
   bucket?: string | null;
-  warn?: number;
   showAll: boolean;
   onSharedZoom: (from: number, to: number) => void;
 }) {
@@ -83,6 +82,16 @@ function ComparisonMetricChart({ metric, sources, data, xRange, rangeLabel, buck
   const chartData = zoomData ?? data;
   const zoomBucket = zoomData && Object.values(zoomData).map((samples) => describeBucket(samples.bucketMs)).find(Boolean);
   const chartBucket = zoom ? zoomBucket : bucket;
+  const warnings = new Map<number, string[]>();
+  if (metric.warnKey) {
+    for (const { label, thresholds } of sources) {
+      const warn = thresholds?.[metric.warnKey];
+      if (warn == null) continue;
+      const labels = warnings.get(warn) ?? [];
+      labels.push(label);
+      warnings.set(warn, labels);
+    }
+  }
   const { t, series } = useMemo(() => {
     const joined = uPlot.join(sources.map(({ id }) => [chartData[id].t, chartData[id][metric.key]] as uPlot.AlignedData));
     return {
@@ -95,7 +104,11 @@ function ComparisonMetricChart({ metric, sources, data, xRange, rangeLabel, buck
     <section className="panel">
       <div className="row chart-heading">
         <h3>{metric.label}{metric.unit === 'MB/s' ? ` (${metric.unit})` : ''}</h3>
-        {warn != null && <span className="hint chart-warning">경고 기준 {warn}%</span>}
+        {[...warnings].map(([warn, labels]) => (
+          <span key={warn} className="hint chart-warning">
+            {warnings.size > 1 ? `${labels.join(', ')} ` : ''}경고 기준 {warn}%
+          </span>
+        ))}
         <span className="hint">조회 기간 · {zoom ? describeRange(zoom) : rangeLabel}{chartBucket ? ` · ${chartBucket}` : ''}</span>
         {zoom && !result && <span className="hint" role="status">확대 구간을 불러오는 중…</span>}
         {zoom && <ChartZoomReset label={metric.label} onReset={resetZoom} />}
@@ -106,7 +119,7 @@ function ComparisonMetricChart({ metric, sources, data, xRange, rangeLabel, buck
         series={series}
         unit={metric.unit}
         max={metric.max}
-        warn={warn}
+        warn={[...warnings.keys()]}
         height={showAll ? undefined : 380}
         spanGaps
         cursorTooltip
@@ -209,8 +222,9 @@ export default function Compare() {
 
   const sources = useMemo(() => selected.map((id) => {
     const index = live.servers.findIndex((server) => server.id === id);
-    return { id, label: live.servers[index]?.name ?? id, color: PALETTE[index % PALETTE.length] };
-  }), [selected.join(','), live.servers]); // eslint-disable-line react-hooks/exhaustive-deps
+    return { id, label: live.servers[index]?.name ?? id, color: PALETTE[index % PALETTE.length],
+      thresholds: serverWarningThresholds(live.settings, id) };
+  }), [selected.join(','), live.servers, live.settings]); // eslint-disable-line react-hooks/exhaustive-deps
   const xRange = useMemo(() => resolveRange(range), [data, JSON.stringify(range)]); // eslint-disable-line react-hooks/exhaustive-deps
   const bucket = data && Object.values(data).map((series) => describeBucket(series.bucketMs)).find(Boolean);
   const rangeLabel = describeRange(range);
@@ -282,7 +296,6 @@ export default function Compare() {
           {(showAll ? METRICS : [metric]).map((metric) => (
             <ComparisonMetricChart key={metric.key} metric={metric} sources={sources} data={data}
               xRange={xRange} rangeLabel={rangeLabel} bucket={bucket} showAll={showAll}
-              warn={metric.warnKey && live.settings ? live.settings[metric.warnKey] : undefined}
               onSharedZoom={(from, to) => setRange({ kind: 'fixed', from, to })} />
           ))}
         </div>

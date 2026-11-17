@@ -2,6 +2,15 @@ using System.Text.Json;
 
 namespace ResourceMonitor.Web.Data;
 
+public sealed record WarningThresholds(double CpuWarn, double MemoryWarn, double DiskWarn)
+{
+    public bool Enabled { get; init; } = true;
+
+    public string? Validate() => new[] { CpuWarn, MemoryWarn, DiskWarn }.All(value => value is >= 1 and <= 100)
+        ? null
+        : "경고 기준은 1~100% 사이여야 합니다.";
+}
+
 public sealed record AppSettings
 {
     public static readonly int[] IntervalChoices = [1, 3, 5, 10, 15, 30, 60];
@@ -12,6 +21,7 @@ public sealed record AppSettings
     public double MemoryWarn { get; init; } = 85;
     public double DiskWarn { get; init; } = 85;
     public IReadOnlyDictionary<string, string?> TagColors { get; init; } = new Dictionary<string, string?>();
+    public IReadOnlyDictionary<Guid, WarningThresholds?> ServerWarnings { get; init; } = new Dictionary<Guid, WarningThresholds?>();
 
     public string? Validate()
     {
@@ -32,9 +42,13 @@ public sealed record AppSettings
             return "태그 색상은 30자 이내 태그에 6자리 색상 코드로 지정해야 합니다.";
         }
 
-        return new[] { CpuWarn, MemoryWarn, DiskWarn }.Any(value => value is < 1 or > 100)
-            ? "경고 기준은 1~100% 사이여야 합니다."
-            : null;
+        if (ServerWarnings is null)
+        {
+            return "서버별 경고 기준을 확인하세요.";
+        }
+
+        return new WarningThresholds(CpuWarn, MemoryWarn, DiskWarn).Validate() ??
+            ServerWarnings.Values.Select(warnings => warnings?.Validate()).FirstOrDefault(error => error is not null);
     }
 }
 

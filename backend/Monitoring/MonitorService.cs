@@ -120,13 +120,16 @@ public sealed class MonitorService(
                 {
                     var sample = new Sample(server.Id, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), interval * 1000,
                         values.Cpu, values.Memory, values.Disk, values.Io);
-                    bool cpuWarn = Math.Round(cpu, 2) >= current.CpuWarn;
-                    bool memoryWarn = values.Memory is { } memory && Math.Round(memory, 2) >= current.MemoryWarn;
+                    var warnings = current.ServerWarnings.GetValueOrDefault(server.Id) is { Enabled: true } activeWarnings
+                        ? activeWarnings
+                        : null;
+                    bool cpuWarn = Math.Round(cpu, 2) >= (warnings?.CpuWarn ?? current.CpuWarn);
+                    bool memoryWarn = values.Memory is { } memory && Math.Round(memory, 2) >= (warnings?.MemoryWarn ?? current.MemoryWarn);
                     var topProcesses = cpuWarn || memoryWarn
                         ? await collector.ReadTopProcessesAsync(cpuWarn, memoryWarn, cancellationToken)
                         : null;
                     cancellationToken.ThrowIfCancellationRequested();
-                    bool diskWarn = values.Disk is { } disk && disk >= current.DiskWarn;
+                    bool diskWarn = values.Disk is { } disk && disk >= (warnings?.DiskWarn ?? current.DiskWarn);
                     if (diskWarn)
                     {
                         if (directoryScan?.IsCompleted == true)
