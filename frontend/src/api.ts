@@ -2,6 +2,28 @@ export type MetricKey = 'cpu' | 'memory' | 'disk' | 'io';
 export type ServerStatus = 'connecting' | 'ok' | 'error' | 'disabled';
 export type Values = Record<MetricKey, number | null>;
 
+export interface ServerSpecs {
+  logicalCores: number | null;
+  memoryKiB: number;
+  rootDiskKiB: number | null;
+}
+
+export interface ProcessUsage {
+  pid: number;
+  name: string;
+  usage: number;
+}
+
+export interface TopProcesses {
+  cpu: ProcessUsage[] | null;
+  memory: ProcessUsage[] | null;
+}
+
+export interface RootDirectoryUsage {
+  entries: { path: string; sizeKiB: number }[];
+  isPartial: boolean;
+}
+
 export interface Server {
   id: string;
   name: string;
@@ -14,8 +36,10 @@ export interface Server {
   tags: string[];
   status: ServerStatus;
   error: string | null;
-  lastUtc: number | null;
   latest: Values | null;
+  specs: ServerSpecs | null;
+  topProcesses: TopProcesses | null;
+  rootDirectories: RootDirectoryUsage | null;
 }
 
 export interface Series {

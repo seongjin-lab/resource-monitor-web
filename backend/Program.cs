@@ -140,7 +140,7 @@ api.MapPost("/servers/test", async (ServerInput input, ServerStore store, Cancel
     timeout.CancelAfter(TimeSpan.FromSeconds(20));
     try
     {
-        var values = await collector.ReadAsync(timeout.Token);
+        var (values, _) = await collector.ReadAsync(timeout.Token);
         return Results.Ok(new { fingerprint = collector.PresentedFingerprint, memory = values.Memory, disk = values.Disk });
     }
     catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
@@ -341,8 +341,10 @@ static object ToView(ServerRecord server, LiveState live)
         server.Tags,
         Status =server.Enabled ? status.State : LiveStates.Disabled,
         status.Error,
-        status.LastUtc,
-        status.Latest
+        status.Latest,
+        status.Specs,
+        TopProcesses = server.Enabled ? status.TopProcesses : null,
+        RootDirectories = server.Enabled ? status.RootDirectories : null
     };
 }
 

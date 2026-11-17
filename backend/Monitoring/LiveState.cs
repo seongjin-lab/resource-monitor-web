@@ -11,7 +11,8 @@ public static class LiveStates
     public const string Disabled = "disabled";
 }
 
-public sealed record LiveStatus(string State, string? Error, long? LastUtc, MetricValues? Latest);
+public sealed record LiveStatus(string State, string? Error, MetricValues? Latest, ServerSpecs? Specs,
+    TopProcesses? TopProcesses, RootDirectoryUsage? RootDirectories);
 
 /// <summary>서버별 현재 상태와 최신 값. 바뀔 때마다 SSE로 알린다.</summary>
 public sealed class LiveState(EventBroker broker)
@@ -19,7 +20,7 @@ public sealed class LiveState(EventBroker broker)
     private readonly ConcurrentDictionary<Guid, LiveStatus> statuses = new();
 
     public LiveStatus Get(Guid id) =>
-        statuses.TryGetValue(id, out var status) ? status : new LiveStatus(LiveStates.Connecting, null, null, null);
+        statuses.TryGetValue(id, out var status) ? status : new LiveStatus(LiveStates.Connecting, null, null, null, null, null);
 
     public void SetState(Guid id, string state, string? error = null)
     {
@@ -29,17 +30,18 @@ public sealed class LiveState(EventBroker broker)
         }
 
         var updated = statuses.AddOrUpdate(id,
-            _ => new LiveStatus(state, error, null, null),
-            (_, old) => old with { State = state, Error = error });
+            _ => new LiveStatus(state, error, null, null, null, null),
+            (_, old) => old with { State = state, Error = error, TopProcesses = null, RootDirectories = null });
         Publish(id, updated);
     }
 
-    public void OnSample(Sample sample)
+    public void OnSample(Sample sample, ServerSpecs specs, TopProcesses? topProcesses, RootDirectoryUsage? rootDirectories)
     {
         var latest = new MetricValues(Round(sample.Cpu), Round(sample.Memory), Round(sample.Disk), Round(sample.Io));
+        var status = new LiveStatus(LiveStates.Ok, null, latest, specs, topProcesses, rootDirectories);
         var updated = statuses.AddOrUpdate(sample.Server,
-            _ => new LiveStatus(LiveStates.Ok, null, sample.Utc, latest),
-            (_, _) => new LiveStatus(LiveStates.Ok, null, sample.Utc, latest));
+            _ => status,
+            (_, _) => status);
         broker.Publish("sample", new
         {
             serverId = sample.Server,
@@ -47,7 +49,9 @@ public sealed class LiveState(EventBroker broker)
             cpu = latest.Cpu,
             memory = latest.Memory,
             disk = latest.Disk,
-            io = latest.Io
+            io = latest.Io,
+            topProcesses,
+            rootDirectories
         });
         Publish(sample.Server, updated);
     }
@@ -59,7 +63,7 @@ public sealed class LiveState(EventBroker broker)
         serverId = id,
         state = status.State,
         error = status.Error,
-        lastUtc = status.LastUtc
+        specs = status.Specs
     });
 
     private static double? Round(double? value) => value is { } number ? Math.Round(number, 2) : null;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { api, Series, Server, Settings } from './api';
+import { api, RootDirectoryUsage, Series, Server, Settings, TopProcesses } from './api';
 import { RangeSpec, resolveRange } from './range';
 
 export interface SampleEvent {
@@ -9,6 +9,8 @@ export interface SampleEvent {
   memory: number | null;
   disk: number | null;
   io: number | null;
+  topProcesses: TopProcesses | null;
+  rootDirectories: RootDirectoryUsage | null;
 }
 
 interface LiveSnapshot {
@@ -79,7 +81,9 @@ export function startLive() {
       ...server,
       status: server.enabled ? data.state : 'disabled',
       error: data.error,
-      lastUtc: data.lastUtc ?? server.lastUtc,
+      specs: data.specs,
+      topProcesses: data.state === 'ok' ? server.topProcesses : null,
+      rootDirectories: data.state === 'ok' ? server.rootDirectories : null,
     }));
   });
   source.addEventListener('sample', (event) => {
@@ -88,8 +92,9 @@ export function startLive() {
       ...server,
       status: 'ok',
       error: null,
-      lastUtc: sample.t * 1000,
       latest: { cpu: sample.cpu, memory: sample.memory, disk: sample.disk, io: sample.io },
+      topProcesses: sample.topProcesses,
+      rootDirectories: sample.rootDirectories,
     }));
     sampleListeners.forEach((listener) => listener(sample));
   });

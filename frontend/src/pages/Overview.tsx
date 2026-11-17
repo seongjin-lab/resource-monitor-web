@@ -5,7 +5,6 @@ import { allTags, formatValue, METRICS, ServerStatus, warnLevel } from '../api';
 import { EmptyState, Segmented, StatusChip, TagFilter, TagList } from '../components/Common';
 import { RefreshInterval } from '../components/RefreshInterval';
 import { useLive } from '../live';
-import { relativeAgo } from '../range';
 
 function serverLevel(status: ServerStatus, levels: ReturnType<typeof warnLevel>[]): Exclude<ServerStatus, 'ok'> | ReturnType<typeof warnLevel> {
   if (status !== 'ok') return status;
@@ -154,7 +153,6 @@ export default function Overview() {
                       </div>
                     ))}
                   </div>
-                  <div className="card-foot">마지막 갱신 {relativeAgo(server.lastUtc)}</div>
                 </Link>
               );
             })}

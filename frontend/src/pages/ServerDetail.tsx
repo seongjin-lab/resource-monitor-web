@@ -8,7 +8,7 @@ import { deleteServerWithConfirm } from '../components/Dialogs';
 import { RefreshInterval } from '../components/RefreshInterval';
 import { refreshServers, useLive, useSeries } from '../live';
 import { useMetricZoom } from '../metricZoom';
-import { describeBucket, describeRange, parseRange, RangeSpec, rangeParams, relativeAgo } from '../range';
+import { describeBucket, describeRange, parseRange, RangeSpec, rangeParams } from '../range';
 
 const METRIC_COLORS = { cpu: '#5fd3a8', memory: '#6aa8ff', disk: '#c08bff', io: '#f5b84a' } as const;
 
@@ -100,6 +100,9 @@ export default function ServerDetail() {
     return { metric, value, level: server.status === 'ok' ? warnLevel(metric, value, live.settings) : 'normal' as const };
   });
   const warnings = metrics.filter(({ level }) => level !== 'normal');
+  const processWarnings = warnings.filter(({ metric }) => metric.key === 'cpu' || metric.key === 'memory');
+  const diskWarning = warnings.some(({ metric }) => metric.key === 'disk');
+  const rootDirectories = server.rootDirectories;
   const rangeLabel = describeRange(range);
   const boundsLabel = bounds && range.kind === 'relative'
     ? describeRange({ kind: 'fixed', ...bounds })
@@ -120,8 +123,15 @@ export default function ServerDetail() {
               ))}
           </h1>
           <p className="subtitle">
-            {server.user}@{server.host}:{server.port} · 마지막 갱신 {relativeAgo(server.lastUtc)} <TagList tags={server.tags} colors={live.settings?.tagColors} />
+            {server.user}@{server.host}:{server.port} <TagList tags={server.tags} colors={live.settings?.tagColors} />
           </p>
+          {server.specs ? (
+            <p className="row hint">
+              <span>논리 코어 {server.specs.logicalCores == null ? '–' : `${server.specs.logicalCores}개`}</span>
+              <span>총 메모리 {formatValue(server.specs.memoryKiB / 1024 ** 2, 'GiB')}</span>
+              <span>루트 디스크(/) {formatValue(server.specs.rootDiskKiB == null ? null : server.specs.rootDiskKiB / 1024 ** 2, 'GiB')}</span>
+            </p>
+          ) : <p className="hint">서버 사양 미수집</p>}
           <RefreshInterval />
         </div>
         <div className="row">
@@ -144,6 +154,64 @@ export default function ServerDetail() {
           ))}
         </div>
       </section>
+
+      {(processWarnings.length > 0 || diskWarning) && (
+        <div className="chart-grid detail-diagnostics">
+          {processWarnings.map(({ metric }) => {
+            const isCpu = metric.key === 'cpu';
+            const processes = server.topProcesses?.[isCpu ? 'cpu' : 'memory'];
+            return (
+              <section key={metric.key} className="panel" aria-labelledby={`processes-${metric.key}`}>
+                <h2 id={`processes-${metric.key}`} className="detail-metrics-title">{metric.label} 사용량 상위 프로세스</h2>
+                {processes?.length ? (
+                  <table className="diagnostic-table">
+                    <thead>
+                      <tr><th scope="col">PID</th><th scope="col">이름</th><th scope="col">{isCpu ? '사용률 (전체 코어 기준)' : '점유 메모리 (RSS)'}</th></tr>
+                    </thead>
+                    <tbody>
+                      {processes.map((process) => (
+                        <tr key={process.pid}>
+                          <td>{process.pid}</td>
+                          <td>{process.name}</td>
+                          <td>{formatValue(process.usage, isCpu ? '%' : 'MiB')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : <p className="hint">조회된 프로세스 정보가 없습니다.</p>}
+              </section>
+            );
+          })}
+          {diskWarning && (
+            <section className="panel" aria-labelledby="disk-directories">
+              <h2 id="disk-directories" className="detail-metrics-title">루트 디스크 사용량 상위 디렉터리</h2>
+              {rootDirectories == null ? (
+                <p className="hint" role="status">디렉터리 용량을 확인하는 중…</p>
+              ) : rootDirectories.entries.length === 0 ? (
+                <p className="hint">디렉터리 용량을 확인하지 못했습니다.</p>
+              ) : (
+                <>
+                  {rootDirectories.isPartial && <p className="hint">일부 경로를 읽지 못해 확인한 용량만 표시합니다.</p>}
+                  <table className="diagnostic-table">
+                    <thead>
+                      <tr><th scope="col">경로</th><th scope="col">용량</th></tr>
+                    </thead>
+                    <tbody>
+                      {rootDirectories.entries.map(({ path, sizeKiB }) => (
+                        <tr key={path}>
+                          <td className="directory-path">{path}</td>
+                          <td>{sizeKiB >= 1024 ** 2 ? formatValue(sizeKiB / 1024 ** 2, 'GiB')
+                            : sizeKiB >= 1024 ? formatValue(sizeKiB / 1024, 'MiB') : formatValue(sizeKiB, 'KiB')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </section>
+          )}
+        </div>
+      )}
 
       <div className="toolbar detail-toolbar">
         <RangePicker key={server.id} value={range} onChange={setRange} />

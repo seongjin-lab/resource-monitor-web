@@ -55,11 +55,3 @@ export function describeBucket(bucketMs: number): string | null {
   const minutes = Math.round(seconds / 60);
   return minutes < 120 ? `${minutes}분 평균` : `${Math.round(minutes / 60)}시간 평균`;
 }
-
-export function relativeAgo(ms: number | null): string {
-  if (!ms) return '수집 기록 없음';
-  const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
-  if (seconds < 60) return `${seconds}초 전`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;
-  return formatTime(ms);
-}

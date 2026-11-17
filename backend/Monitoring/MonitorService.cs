@@ -102,22 +102,49 @@ public sealed class MonitorService(
         }
 
         using var collector = new SshCollector(target);
+        Task<RootDirectoryUsage>? directoryScan = null;
+        RootDirectoryUsage? rootDirectories = null;
+        long lastDirectoryScan = 0;
         int failures = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
-            int interval = settings.Current.IntervalSeconds;
+            var current = settings.Current;
+            int interval = current.IntervalSeconds;
             long started = Stopwatch.GetTimestamp();
             TimeSpan delay;
             try
             {
-                var values = await collector.ReadAsync(cancellationToken, Math.Max(15, interval * 3));
+                var (values, specs) = await collector.ReadAsync(cancellationToken, Math.Max(15, interval * 3));
                 failures = 0;
-                if (values.Cpu is not null)
+                if (values.Cpu is { } cpu)
                 {
                     var sample = new Sample(server.Id, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), interval * 1000,
                         values.Cpu, values.Memory, values.Disk, values.Io);
+                    bool cpuWarn = Math.Round(cpu, 2) >= current.CpuWarn;
+                    bool memoryWarn = values.Memory is { } memory && Math.Round(memory, 2) >= current.MemoryWarn;
+                    var topProcesses = cpuWarn || memoryWarn
+                        ? await collector.ReadTopProcessesAsync(cpuWarn, memoryWarn, cancellationToken)
+                        : null;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    bool diskWarn = values.Disk is { } disk && disk >= current.DiskWarn;
+                    if (diskWarn)
+                    {
+                        if (directoryScan?.IsCompleted == true)
+                        {
+                            rootDirectories = await directoryScan;
+                            directoryScan = null;
+                        }
+
+                        if (directoryScan is null && (lastDirectoryScan == 0 ||
+                            Stopwatch.GetElapsedTime(lastDirectoryScan) >= TimeSpan.FromMinutes(5)))
+                        {
+                            lastDirectoryScan = Stopwatch.GetTimestamp();
+                            directoryScan = SshCollector.ReadRootDirectoriesAsync(target, cancellationToken);
+                        }
+                    }
+
                     writer.Enqueue(sample);
-                    live.OnSample(sample);
+                    live.OnSample(sample, specs, topProcesses, diskWarn ? rootDirectories : null);
                     delay = TimeSpan.FromSeconds(interval) - Stopwatch.GetElapsedTime(started);
                 }
                 else
@@ -148,6 +175,11 @@ public sealed class MonitorService(
                     break;
                 }
             }
+        }
+
+        if (directoryScan is not null)
+        {
+            await directoryScan;
         }
     }
 
