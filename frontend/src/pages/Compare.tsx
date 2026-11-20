@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import uPlot from 'uplot';
-import { allTags, api, MetricDef, METRICS, Series, serverWarningThresholds, WarningThresholds } from '../api';
+import { allTags, api, formatValue, MetricDef, METRICS, Series, serverWarningThresholds, WarningThresholds } from '../api';
 import { Chart, ChartZoomReset } from '../components/Chart';
 import { EmptyState, RangePicker, Segmented } from '../components/Common';
 import { RefreshInterval } from '../components/RefreshInterval';
@@ -27,7 +27,7 @@ function useComparisonSeries(selected: string[], range?: RangeSpec) {
     let cancelled = false;
     const load = () => {
       const { from, to } = resolveRange(range);
-      Promise.all(selected.map((id) => api.samples(id, from, to, 600).then((series) => [id, series] as const)))
+      Promise.all(selected.map((id) => api.samples(id, from, to, 600, range.kind === 'fixed').then((series) => [id, series] as const)))
         .then((entries) => !cancelled && setResult({ key, data: Object.fromEntries(entries) }))
         .catch((error: Error) => {
           if (!cancelled) setResult((current) =>
@@ -114,6 +114,26 @@ function ComparisonMetricChart({ metric, sources, data, xRange, rangeLabel, buck
         {zoom && <ChartZoomReset label={metric.label} onReset={resetZoom} />}
       </div>
       {result && 'error' in result && <div className="banner error" role="alert">확대 구간 조회 실패 · {result.error}</div>}
+      {sources.some(({ id }) => chartData[id].statistics) && (
+        <table className="comparison-statistics" aria-label={`${metric.label} ${zoomData ? '확대' : '조회'} 기간 통계`}>
+          <thead>
+            <tr><th scope="col">서버</th><th scope="col">평균</th><th scope="col">최대</th><th scope="col">최저</th></tr>
+          </thead>
+          <tbody>
+            {sources.map(({ id, label, color }) => {
+              const statistics = chartData[id].statistics?.[metric.key];
+              return (
+                <tr key={id}>
+                  <th scope="row"><span className="comparison-statistics-server" style={{ color }}>{label}</span></th>
+                  <td>{formatValue(statistics?.average, metric.unit)}</td>
+                  <td>{formatValue(statistics?.maximum, metric.unit)}</td>
+                  <td>{formatValue(statistics?.minimum, metric.unit)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
       <Chart
         t={t}
         series={series}
