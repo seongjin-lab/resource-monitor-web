@@ -6,10 +6,15 @@ namespace ResourceMonitor.Web.Data;
 
 public sealed record Sample(Guid Server, long Utc, int IntervalMs, double? Cpu, double? Memory, double? Disk, double? Io);
 
+public sealed record MetricStatistics(double? Average, double? Maximum, double? Minimum);
+public sealed record SeriesStatistics(MetricStatistics Cpu, MetricStatistics Memory, MetricStatistics Disk, MetricStatistics Io);
+
 /// <summary>uPlot이 바로 쓸 수 있는 열 단위 시계열. T는 Unix 초.</summary>
 public sealed record SeriesResult(long BucketMs, List<double> T, List<double?> Cpu, List<double?> Memory,
     List<double?> Disk, List<double?> Io)
 {
+    public SeriesStatistics? Statistics { get; init; }
+
     public static SeriesResult Empty(long bucketMs) => new(bucketMs, [], [], [], [], []);
 
     public void Add(long utc, double? cpu, double? memory, double? disk, double? io)
@@ -59,18 +64,41 @@ public sealed class SampleStore(Database database)
     /// <summary>
     /// 기간 안의 지표를 최대 maxPoints개 구간으로 묶어 평균을 낸다. 수집이 끊긴 구간에는 null을 넣어 선이 이어지지 않게 한다.
     /// </summary>
-    public SeriesResult Query(Guid server, long fromMs, long toMs, int maxPoints)
+    public SeriesResult Query(Guid server, long fromMs, long toMs, int maxPoints, bool includeStatistics = false)
     {
         maxPoints = Math.Clamp(maxPoints, 50, 5000);
         long span = Math.Max(1, toMs - fromMs);
         using var connection = database.Open();
+        using var transaction = connection.BeginTransaction(deferred: true);
         using var count = connection.CreateCommand();
-        count.CommandText = "SELECT count(*) FROM samples WHERE server = $server AND utc >= $from AND utc < $to";
+        count.Transaction = transaction;
+        count.CommandText = includeStatistics
+            ? """
+              SELECT count(*), avg(cpu), max(cpu), min(cpu), avg(memory), max(memory), min(memory),
+                  avg(disk), max(disk), min(disk), avg(io), max(io), min(io)
+              FROM samples WHERE server = $server AND utc >= $from AND utc < $to
+              """
+            : "SELECT count(*) FROM samples WHERE server = $server AND utc >= $from AND utc < $to";
         AddRange(count, server, fromMs, toMs);
-        long rows = Convert.ToInt64(count.ExecuteScalar(), CultureInfo.InvariantCulture);
+        long rows;
+        SeriesStatistics? statistics = null;
+        using (var totals = count.ExecuteReader())
+        {
+            totals.Read();
+            rows = totals.GetInt64(0);
+            if (includeStatistics)
+            {
+                statistics = new SeriesStatistics(
+                    new MetricStatistics(Nullable(totals, 1), Nullable(totals, 2), Nullable(totals, 3)),
+                    new MetricStatistics(Nullable(totals, 4), Nullable(totals, 5), Nullable(totals, 6)),
+                    new MetricStatistics(Nullable(totals, 7), Nullable(totals, 8), Nullable(totals, 9)),
+                    new MetricStatistics(Nullable(totals, 10), Nullable(totals, 11), Nullable(totals, 12)));
+            }
+        }
         long bucket = rows <= maxPoints ? 0 : (span + maxPoints - 1) / maxPoints;
 
         using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = bucket == 0
             ? """
               SELECT utc, interval_ms, cpu, memory, disk, io FROM samples
@@ -84,7 +112,7 @@ public sealed class SampleStore(Database database)
         AddRange(command, server, fromMs, toMs);
         command.Parameters.AddWithValue("$bucket", Math.Max(bucket, 1));
 
-        var result = SeriesResult.Empty(bucket);
+        var result = SeriesResult.Empty(bucket) with { Statistics = statistics };
         using var reader = command.ExecuteReader();
         long previousTime = -1;
         long previousInterval = 0;

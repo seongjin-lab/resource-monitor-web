@@ -190,10 +190,10 @@ api.MapPost("/servers/import", async (HttpRequest request, ServerStore store, Mo
 });
 
 // ---- 지표 ----
-api.MapGet("/servers/{id:guid}/samples", (Guid id, long? from, long? to, int? points, SampleStore samples) =>
+api.MapGet("/servers/{id:guid}/samples", (Guid id, long? from, long? to, int? points, bool? statistics, SampleStore samples) =>
 {
     var (start, end) = Range(from, to, TimeSpan.FromMinutes(15));
-    return Results.Ok(samples.Query(id, start, end, points ?? 800));
+    return Results.Ok(samples.Query(id, start, end, points ?? 800, statistics ?? false));
 });
 
 api.MapGet("/servers/{id:guid}/samples.csv", async (Guid id, long? from, long? to, ServerStore store, SampleStore samples,

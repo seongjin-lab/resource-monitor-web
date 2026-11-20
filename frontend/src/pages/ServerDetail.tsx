@@ -24,6 +24,7 @@ function DetailMetricChart({ serverId, metric, data, range, bounds, warn }: {
   const { data: zoomData, error, loading } = useSeries(zoom ? serverId : undefined, zoom ?? range);
   const chartData = zoomData ?? data;
   const values = chartData[metric.key];
+  const statistics = chartData.statistics?.[metric.key];
   const series = useMemo(() => [{ label: metric.label, color: METRIC_COLORS[metric.key], values }], [metric, values]);
 
   return (
@@ -35,6 +36,13 @@ function DetailMetricChart({ serverId, metric, data, range, bounds, warn }: {
         {zoom && <ChartZoomReset label={metric.label} onReset={resetZoom} />}
       </div>
       {error && <div className="banner error" role="alert">확대 구간 조회 실패 · {error}</div>}
+      {statistics && (
+        <dl className="metric-statistics" aria-label={`${metric.label} ${zoomData ? '확대' : '조회'} 기간 통계`}>
+          <div><dt>평균</dt><dd>{formatValue(statistics.average, metric.unit)}</dd></div>
+          <div><dt>최대</dt><dd>{formatValue(statistics.maximum, metric.unit)}</dd></div>
+          <div><dt>최저</dt><dd>{formatValue(statistics.minimum, metric.unit)}</dd></div>
+        </dl>
+      )}
       {values.some((value) => value != null) ? (
         <Chart
           t={chartData.t}

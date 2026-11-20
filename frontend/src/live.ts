@@ -154,7 +154,7 @@ export function useSeries(serverId: string | undefined, range: RangeSpec, points
       pending = true;
       const bounds = resolveRange(range);
       try {
-        const data = await api.samples(serverId, bounds.from, bounds.to, points);
+        const data = await api.samples(serverId, bounds.from, bounds.to, points, range.kind === 'fixed');
         if (!cancelled) setResult({ request, data, bounds, error: null });
       } catch (reason) {
         if (!cancelled) {

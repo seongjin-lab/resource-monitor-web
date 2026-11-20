@@ -49,6 +49,11 @@ export interface Series {
   memory: (number | null)[];
   disk: (number | null)[];
   io: (number | null)[];
+  statistics?: Record<MetricKey, {
+    average: number | null;
+    maximum: number | null;
+    minimum: number | null;
+  }> | null;
 }
 
 export interface WarningThresholds {
@@ -147,8 +152,8 @@ export const api = {
     form.append('password', password);
     return request<{ added: number; skipped: number }>('/api/servers/import', { method: 'POST', body: form });
   },
-  samples: (id: string, from: number, to: number, points = 800) =>
-    request<Series>(`/api/servers/${id}/samples?from=${Math.floor(from)}&to=${Math.ceil(to)}&points=${points}`),
+  samples: (id: string, from: number, to: number, points = 800, statistics = false) =>
+    request<Series>(`/api/servers/${id}/samples?from=${Math.floor(from)}&to=${Math.ceil(to)}&points=${points}&statistics=${statistics}`),
   csvUrl: (id: string, from: number, to: number) =>
     `/api/servers/${id}/samples.csv?from=${Math.floor(from)}&to=${Math.ceil(to)}`,
   settings: () => request<{ current: Settings; intervalChoices: number[] }>('/api/settings'),

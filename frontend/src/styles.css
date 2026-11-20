@@ -265,6 +265,9 @@ textarea { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; 
 .chart-heading { gap: 4px 14px; margin-bottom: 8px; }
 .chart-heading h3 { margin: 0; color: var(--text); }
 .chart-heading .hint { margin: 0; }
+.metric-statistics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 14px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.metric-statistics dt { color: var(--muted); font-size: 12px; }
+.metric-statistics dd { margin: 4px 0 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .chart-zoom-reset { margin-left: auto; padding: 3px 8px; font-size: 12px; }
 .chart-warning { display: inline-flex; align-items: center; gap: 6px; color: var(--warn); }
 .chart-warning::before { content: ''; width: 18px; border-top: 1px dashed currentColor; }
